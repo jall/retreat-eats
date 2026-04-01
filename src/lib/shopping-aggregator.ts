@@ -1,5 +1,5 @@
 import type { Meal, Attendance, ShoppingItem, RetreatDay } from '../types'
-import { getPrefillsForMealType, SNACK_PREFILLS, type PrefillItem } from './prefills'
+import { getPrefillsForMealType, SNACK_PREFILLS } from './prefills'
 
 type AggregatedItem = {
   name: string
