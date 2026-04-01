@@ -1,0 +1,239 @@
+import { useState } from 'react'
+import {
+  useUpdateMeal,
+  useMealAssignments,
+  useAddMealAssignment,
+  useRemoveMealAssignment,
+  useAttendance,
+  useAddShoppingItem,
+} from '../../lib/queries'
+import type { Meal, RetreatMember, MealStyle } from '../../types'
+import Button from '../ui/Button'
+import Input from '../ui/Input'
+
+type MealDetailProps = {
+  meal: Meal
+  retreatId: string
+  members: RetreatMember[]
+  onClose: () => void
+}
+
+export default function MealDetail({ meal, retreatId, members, onClose }: MealDetailProps) {
+  const [label, setLabel] = useState(meal.label)
+  const [time, setTime] = useState(meal.time)
+  const [style, setStyle] = useState<MealStyle>(meal.style)
+  const [recipeTitle, setRecipeTitle] = useState(meal.recipe_title || '')
+  const [recipeNotes, setRecipeNotes] = useState(meal.recipe_notes || '')
+  const [ingredientName, setIngredientName] = useState('')
+  const [ingredientQty, setIngredientQty] = useState('')
+
+  const updateMeal = useUpdateMeal()
+  const { data: assignments = [] } = useMealAssignments(meal.id)
+  const addAssignment = useAddMealAssignment()
+  const removeAssignment = useRemoveMealAssignment()
+  const { data: attendance = [] } = useAttendance(retreatId)
+  const addShoppingItem = useAddShoppingItem()
+
+  const mealAttendees = attendance.filter((a) => a.meal_id === meal.id)
+  const attendeeMembers = mealAttendees
+    .map((a) => members.find((m) => m.id === a.member_id))
+    .filter(Boolean)
+  const allergies = [...new Set(attendeeMembers.map((m) => m!.allergies).filter(Boolean))]
+
+  const lead = assignments.find((a) => a.duty === 'lead')
+  const helpers = assignments.filter((a) => a.duty === 'helper')
+
+  const handleSave = () => {
+    updateMeal.mutate({
+      id: meal.id,
+      retreatId,
+      updates: {
+        label,
+        time,
+        style,
+        recipe_title: style === 'assigned_recipe' ? recipeTitle : null,
+        recipe_notes: style === 'assigned_recipe' ? recipeNotes : null,
+      },
+    })
+  }
+
+  const handleAssignLead = (memberId: string) => {
+    if (lead) {
+      removeAssignment.mutate({ id: lead.id, meal_id: meal.id })
+    }
+    if (memberId) {
+      addAssignment.mutate({ meal_id: meal.id, member_id: memberId, duty: 'lead' })
+    }
+  }
+
+  const handleToggleHelper = (memberId: string) => {
+    const existing = helpers.find((h) => h.member_id === memberId)
+    if (existing) {
+      removeAssignment.mutate({ id: existing.id, meal_id: meal.id })
+    } else {
+      addAssignment.mutate({ meal_id: meal.id, member_id: memberId, duty: 'helper' })
+    }
+  }
+
+  const handleAddIngredient = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!ingredientName.trim()) return
+    addShoppingItem.mutate({
+      retreat_id: retreatId,
+      name: ingredientName.trim(),
+      quantity: ingredientQty.trim() || undefined,
+      category: 'ingredients',
+      meal_id: meal.id,
+    })
+    setIngredientName('')
+    setIngredientQty('')
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-bold text-stone-800">Edit Meal</h2>
+          <button
+            onClick={onClose}
+            className="text-stone-400 hover:text-stone-600"
+            aria-label="Close"
+          >
+            &times;
+          </button>
+        </div>
+
+        {/* Allergy banner */}
+        {allergies.length > 0 && (
+          <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 p-3">
+            <p className="text-sm font-medium text-amber-800">Allergy alert</p>
+            <p className="text-sm text-amber-700">{allergies.join(', ')}</p>
+          </div>
+        )}
+
+        <div className="space-y-4">
+          {/* Label & time */}
+          <Input label="Label" value={label} onChange={(e) => setLabel(e.target.value)} />
+          <Input label="Time" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+
+          {/* Style toggle */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-stone-700">Style</span>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setStyle('generic')}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  style === 'generic'
+                    ? 'bg-green-700 text-white'
+                    : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                }`}
+              >
+                Generic
+              </button>
+              <button
+                type="button"
+                onClick={() => setStyle('assigned_recipe')}
+                className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                  style === 'assigned_recipe'
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-stone-100 text-stone-600 hover:bg-stone-200'
+                }`}
+              >
+                Assigned Recipe
+              </button>
+            </div>
+          </div>
+
+          {/* Recipe fields */}
+          {style === 'assigned_recipe' && (
+            <>
+              <Input
+                label="Recipe title"
+                value={recipeTitle}
+                onChange={(e) => setRecipeTitle(e.target.value)}
+                placeholder="e.g. Thai Green Curry"
+              />
+              <div className="flex flex-col gap-1.5">
+                <label className="text-sm font-medium text-stone-700">Recipe notes</label>
+                <textarea
+                  className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900
+                    placeholder:text-stone-400 focus:border-green-500 focus:outline-none focus:ring-2
+                    focus:ring-green-500/20"
+                  rows={3}
+                  value={recipeNotes}
+                  onChange={(e) => setRecipeNotes(e.target.value)}
+                  placeholder="Instructions, links, etc."
+                />
+              </div>
+
+              {/* Add ingredient */}
+              <form onSubmit={handleAddIngredient} className="flex gap-2">
+                <Input
+                  placeholder="Ingredient name"
+                  value={ingredientName}
+                  onChange={(e) => setIngredientName(e.target.value)}
+                />
+                <Input
+                  placeholder="Qty"
+                  value={ingredientQty}
+                  onChange={(e) => setIngredientQty(e.target.value)}
+                  className="w-24"
+                />
+                <Button type="submit" size="sm">
+                  Add
+                </Button>
+              </form>
+            </>
+          )}
+
+          {/* Assign lead */}
+          <div className="flex flex-col gap-1.5">
+            <label className="text-sm font-medium text-stone-700">Lead cook</label>
+            <select
+              value={lead?.member_id || ''}
+              onChange={(e) => handleAssignLead(e.target.value)}
+              className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900
+                focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+            >
+              <option value="">None</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.display_name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Assign helpers */}
+          <div className="flex flex-col gap-1.5">
+            <span className="text-sm font-medium text-stone-700">Helpers</span>
+            <div className="space-y-1">
+              {members.map((m) => (
+                <label key={m.id} className="flex items-center gap-2 text-sm text-stone-700">
+                  <input
+                    type="checkbox"
+                    checked={helpers.some((h) => h.member_id === m.id)}
+                    onChange={() => handleToggleHelper(m.id)}
+                    className="rounded border-stone-300 text-green-700 focus:ring-green-500"
+                  />
+                  {m.display_name}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Save / close */}
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="secondary" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button onClick={handleSave} disabled={updateMeal.isPending}>
+              {updateMeal.isPending ? 'Saving...' : 'Save changes'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}

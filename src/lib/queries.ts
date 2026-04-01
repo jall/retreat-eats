@@ -1,0 +1,442 @@
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { supabase } from './supabase'
+import type {
+  Retreat,
+  RetreatMember,
+  RetreatDay,
+  Meal,
+  MealAssignment,
+  Attendance,
+  ShoppingItem,
+} from '../types'
+
+// ── Query hooks ──────────────────────────────────────────────────────
+
+export function useRetreat(id: string) {
+  return useQuery<Retreat>({
+    queryKey: ['retreat', id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('retreats')
+        .select('*')
+        .eq('id', id)
+        .single()
+      if (error) throw error
+      return data
+    },
+  })
+}
+
+export function useRetreatMembers(retreatId: string) {
+  return useQuery<RetreatMember[]>({
+    queryKey: ['retreat-members', retreatId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('retreat_members')
+        .select('*')
+        .eq('retreat_id', retreatId)
+        .order('created_at')
+      if (error) throw error
+      return data
+    },
+  })
+}
+
+export function useRetreatDays(retreatId: string) {
+  return useQuery<RetreatDay[]>({
+    queryKey: ['retreat-days', retreatId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('retreat_days')
+        .select('*')
+        .eq('retreat_id', retreatId)
+        .order('date')
+      if (error) throw error
+      return data
+    },
+  })
+}
+
+export function useMeals(retreatId: string) {
+  return useQuery<Meal[]>({
+    queryKey: ['meals', retreatId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meals')
+        .select('*, retreat_day:retreat_days!inner(*)')
+        .eq('retreat_day.retreat_id', retreatId)
+        .order('time')
+      if (error) throw error
+      return data
+    },
+  })
+}
+
+export function useAttendance(retreatId: string) {
+  return useQuery<Attendance[]>({
+    queryKey: ['attendance', retreatId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('attendance')
+        .select('*, meal:meals!inner(retreat_day:retreat_days!inner(retreat_id))')
+        .eq('meal.retreat_day.retreat_id', retreatId)
+      if (error) throw error
+      // flatten — strip the join metadata
+      return data.map((a: Record<string, unknown>) => ({
+        id: a.id as string,
+        meal_id: a.meal_id as string,
+        member_id: a.member_id as string,
+      }))
+    },
+  })
+}
+
+export function useMealAssignments(mealId: string) {
+  return useQuery<MealAssignment[]>({
+    queryKey: ['meal-assignments', mealId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('meal_assignments')
+        .select('*')
+        .eq('meal_id', mealId)
+      if (error) throw error
+      return data
+    },
+  })
+}
+
+export function useShoppingItems(retreatId: string) {
+  return useQuery<ShoppingItem[]>({
+    queryKey: ['shopping-items', retreatId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('shopping_items')
+        .select('*')
+        .eq('retreat_id', retreatId)
+        .order('created_at')
+      if (error) throw error
+      return data
+    },
+  })
+}
+
+// ── Mutation hooks ───────────────────────────────────────────────────
+
+function generateJoinCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let code = ''
+  for (let i = 0; i < 8; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)]
+  }
+  return code
+}
+
+function dateRange(start: string, end: string): string[] {
+  const dates: string[] = []
+  const current = new Date(start + 'T00:00:00')
+  const last = new Date(end + 'T00:00:00')
+  while (current <= last) {
+    dates.push(current.toISOString().slice(0, 10))
+    current.setDate(current.getDate() + 1)
+  }
+  return dates
+}
+
+const DEFAULT_MEALS = [
+  { label: 'Breakfast', time: '08:00' },
+  { label: 'Lunch', time: '12:30' },
+  { label: 'Dinner', time: '19:00' },
+]
+
+export function useCreateRetreat() {
+  const qc = useQueryClient()
+  return useMutation<Retreat, Error, { name: string; start_date: string; end_date: string }>({
+    mutationFn: async (input) => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      // Create the retreat with a join code
+      const join_code = generateJoinCode()
+      const { data: retreat, error } = await supabase
+        .from('retreats')
+        .insert({ ...input, join_code, created_by: user.id })
+        .select()
+        .single()
+      if (error) throw error
+
+      // Add creator as organiser
+      await supabase.from('retreat_members').insert({
+        retreat_id: retreat.id,
+        user_id: user.id,
+        display_name: user.email?.split('@')[0] || 'Organiser',
+        email: user.email || '',
+        role: 'organiser',
+        allergies: '',
+      })
+
+      // Create days
+      const dates = dateRange(input.start_date, input.end_date)
+      const dayRows = dates.map((date) => ({ retreat_id: retreat.id, date }))
+      const { data: createdDays } = await supabase
+        .from('retreat_days')
+        .insert(dayRows)
+        .select()
+
+      // Create default meals per day
+      if (createdDays) {
+        const mealRows = createdDays.flatMap((day) =>
+          DEFAULT_MEALS.map((m) => ({
+            retreat_day_id: day.id,
+            label: m.label,
+            time: m.time,
+            style: 'generic' as const,
+          }))
+        )
+        await supabase.from('meals').insert(mealRows)
+      }
+
+      return retreat
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['retreats'] })
+    },
+  })
+}
+
+export function useJoinRetreat() {
+  const qc = useQueryClient()
+  return useMutation<{ retreat_id: string }, Error, { join_code: string }>({
+    mutationFn: async ({ join_code }) => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Not authenticated')
+
+      // Find retreat by join code
+      const { data: retreat, error: findError } = await supabase
+        .from('retreats')
+        .select('id')
+        .eq('join_code', join_code)
+        .single()
+      if (findError) throw new Error('Invalid join code')
+
+      // Check if a member row already exists for this email (pre-added by organiser)
+      const { data: existing } = await supabase
+        .from('retreat_members')
+        .select('id')
+        .eq('retreat_id', retreat.id)
+        .eq('email', user.email || '')
+        .maybeSingle()
+
+      if (existing) {
+        // Link the pre-added member to this user
+        await supabase
+          .from('retreat_members')
+          .update({ user_id: user.id })
+          .eq('id', existing.id)
+      } else {
+        // Create new member
+        const { error: joinError } = await supabase
+          .from('retreat_members')
+          .insert({
+            retreat_id: retreat.id,
+            user_id: user.id,
+            display_name: user.email?.split('@')[0] || 'Guest',
+            email: user.email || '',
+            role: 'participant',
+            allergies: '',
+          })
+        if (joinError) throw joinError
+      }
+
+      return { retreat_id: retreat.id }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['retreat-members'] })
+    },
+  })
+}
+
+export function useToggleAttendance() {
+  const qc = useQueryClient()
+  return useMutation<
+    void,
+    Error,
+    { mealId: string; memberId: string; attending: boolean; retreatId: string }
+  >({
+    mutationFn: async ({ mealId, memberId, attending }) => {
+      if (attending) {
+        const { error } = await supabase
+          .from('attendance')
+          .insert({ meal_id: mealId, member_id: memberId })
+        if (error) throw error
+      } else {
+        const { error } = await supabase
+          .from('attendance')
+          .delete()
+          .eq('meal_id', mealId)
+          .eq('member_id', memberId)
+        if (error) throw error
+      }
+    },
+    onSuccess: (_, { retreatId }) => {
+      qc.invalidateQueries({ queryKey: ['attendance', retreatId] })
+    },
+  })
+}
+
+export function useUpdateMeal() {
+  const qc = useQueryClient()
+  return useMutation<
+    Meal,
+    Error,
+    { id: string; retreatId: string; updates: Partial<Omit<Meal, 'id'>> }
+  >({
+    mutationFn: async ({ id, updates }) => {
+      const { data, error } = await supabase
+        .from('meals')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: (_, { retreatId }) => {
+      qc.invalidateQueries({ queryKey: ['meals', retreatId] })
+    },
+  })
+}
+
+export function useAddMealAssignment() {
+  const qc = useQueryClient()
+  return useMutation<
+    MealAssignment,
+    Error,
+    { meal_id: string; member_id: string; duty: 'lead' | 'helper' }
+  >({
+    mutationFn: async (input) => {
+      const { data, error } = await supabase
+        .from('meal_assignments')
+        .insert(input)
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: (_, { meal_id }) => {
+      qc.invalidateQueries({ queryKey: ['meal-assignments', meal_id] })
+    },
+  })
+}
+
+export function useRemoveMealAssignment() {
+  const qc = useQueryClient()
+  return useMutation<void, Error, { id: string; meal_id: string }>({
+    mutationFn: async ({ id }) => {
+      const { error } = await supabase
+        .from('meal_assignments')
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: (_, { meal_id }) => {
+      qc.invalidateQueries({ queryKey: ['meal-assignments', meal_id] })
+    },
+  })
+}
+
+export function useAddShoppingItem() {
+  const qc = useQueryClient()
+  return useMutation<
+    ShoppingItem,
+    Error,
+    { retreat_id: string; name: string; quantity?: string; category?: string; meal_id?: string | null }
+  >({
+    mutationFn: async (input) => {
+      const { data: { user } } = await supabase.auth.getUser()
+      const { data, error } = await supabase
+        .from('shopping_items')
+        .insert({
+          retreat_id: input.retreat_id,
+          name: input.name,
+          quantity: input.quantity || null,
+          category: input.category || 'other',
+          meal_id: input.meal_id || null,
+          is_prefill: false,
+          added_by: user?.id || null,
+        })
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: (_, { retreat_id }) => {
+      qc.invalidateQueries({ queryKey: ['shopping-items', retreat_id] })
+    },
+  })
+}
+
+export function useRemoveShoppingItem() {
+  const qc = useQueryClient()
+  return useMutation<void, Error, { id: string; retreat_id: string }>({
+    mutationFn: async ({ id }) => {
+      const { error } = await supabase
+        .from('shopping_items')
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: (_, { retreat_id }) => {
+      qc.invalidateQueries({ queryKey: ['shopping-items', retreat_id] })
+    },
+  })
+}
+
+export function useAddMember() {
+  const qc = useQueryClient()
+  return useMutation<
+    RetreatMember,
+    Error,
+    { retreat_id: string; display_name: string; email: string }
+  >({
+    mutationFn: async (input) => {
+      const { data, error } = await supabase
+        .from('retreat_members')
+        .insert({
+          ...input,
+          user_id: null,
+          role: 'participant',
+          allergies: '',
+        })
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: (_, { retreat_id }) => {
+      qc.invalidateQueries({ queryKey: ['retreat-members', retreat_id] })
+    },
+  })
+}
+
+export function useUpdateMember() {
+  const qc = useQueryClient()
+  return useMutation<
+    RetreatMember,
+    Error,
+    { id: string; retreat_id: string; updates: Partial<Omit<RetreatMember, 'id'>> }
+  >({
+    mutationFn: async ({ id, updates }) => {
+      const { data, error } = await supabase
+        .from('retreat_members')
+        .update(updates)
+        .eq('id', id)
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: (_, { retreat_id }) => {
+      qc.invalidateQueries({ queryKey: ['retreat-members', retreat_id] })
+    },
+  })
+}
