@@ -3,7 +3,9 @@ import {
   useShoppingItems,
   useAddShoppingItem,
   useRemoveShoppingItem,
+  useRetreatMembers,
 } from '../../lib/queries'
+import { useAuth } from '../layout/AuthGuard'
 import { SNACK_PREFILLS } from '../../lib/prefills'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
@@ -13,12 +15,16 @@ type SnackRequestsProps = {
 }
 
 export default function SnackRequests({ retreatId }: SnackRequestsProps) {
+  const { user } = useAuth()
   const { data: allItems = [] } = useShoppingItems(retreatId)
+  const { data: members = [] } = useRetreatMembers(retreatId)
   const addItem = useAddShoppingItem()
   const removeItem = useRemoveShoppingItem()
 
   const [newName, setNewName] = useState('')
   const [newQty, setNewQty] = useState('')
+
+  const currentMember = members.find((m) => m.user_id === user.id)
 
   // Snack requests are shopping_items where meal_id is null
   const snackItems = allItems.filter((item) => !item.meal_id)
@@ -33,6 +39,7 @@ export default function SnackRequests({ retreatId }: SnackRequestsProps) {
         quantity: newQty.trim() || undefined,
         category: 'snacks',
         meal_id: null,
+        added_by_member_id: currentMember?.id || null,
       },
       { onSuccess: () => { setNewName(''); setNewQty('') } }
     )
@@ -44,6 +51,7 @@ export default function SnackRequests({ retreatId }: SnackRequestsProps) {
       name,
       category: 'snacks',
       meal_id: null,
+      added_by_member_id: currentMember?.id || null,
     })
   }
 

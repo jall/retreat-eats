@@ -24,9 +24,9 @@ export default function ParticipantList({ retreatId }: ParticipantListProps) {
 
   const handleAddMember = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!newName.trim() || !newEmail.trim()) return
+    if (!newName.trim()) return
     addMember.mutate(
-      { retreat_id: retreatId, display_name: newName.trim(), email: newEmail.trim() },
+      { retreat_id: retreatId, display_name: newName.trim(), email: newEmail.trim() || undefined },
       { onSuccess: () => { setNewName(''); setNewEmail('') } }
     )
   }
@@ -141,11 +141,10 @@ export default function ParticipantList({ retreatId }: ParticipantListProps) {
               required
             />
             <Input
-              placeholder="Email"
+              placeholder="Email (optional)"
               type="email"
               value={newEmail}
               onChange={(e) => setNewEmail(e.target.value)}
-              required
             />
             <Button type="submit" size="sm" disabled={addMember.isPending}>
               Add

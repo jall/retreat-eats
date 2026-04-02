@@ -8,9 +8,12 @@ type MealCardProps = {
   retreatId: string
   members: RetreatMember[]
   attendanceCount: number
+  prefillNames?: string[]
+  isOrganiser?: boolean
+  onDelete?: () => void
 }
 
-export default function MealCard({ meal, retreatId, members, attendanceCount }: MealCardProps) {
+export default function MealCard({ meal, retreatId, members, attendanceCount, prefillNames = [], isOrganiser, onDelete }: MealCardProps) {
   const [expanded, setExpanded] = useState(false)
   const { data: assignments = [] } = useMealAssignments(meal.id)
 
@@ -41,27 +44,49 @@ export default function MealCard({ meal, retreatId, members, attendanceCount }: 
             <h3 className="font-semibold text-stone-800">{meal.label}</h3>
             <p className="text-sm text-stone-500">{formatTime(meal.time)}</p>
           </div>
-          <span
-            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-              meal.style === 'assigned_recipe'
-                ? 'bg-amber-100 text-amber-800'
-                : 'bg-stone-100 text-stone-600'
-            }`}
-          >
-            {meal.style === 'assigned_recipe' ? 'Recipe' : 'Generic'}
-          </span>
+          <div className="flex items-center gap-1">
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                meal.style === 'assigned_recipe'
+                  ? 'bg-amber-100 text-amber-800'
+                  : 'bg-stone-100 text-stone-600'
+              }`}
+            >
+              {meal.style === 'assigned_recipe' ? 'Recipe' : 'Generic'}
+            </span>
+            {isOrganiser && onDelete && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (confirm(`Delete ${meal.label}?`)) onDelete()
+                }}
+                className="ml-1 rounded p-1 text-stone-400 hover:bg-red-50 hover:text-red-500"
+                title="Delete meal"
+              >
+                &times;
+              </button>
+            )}
+          </div>
         </div>
 
         {meal.style === 'assigned_recipe' && meal.recipe_title && (
           <p className="mb-2 text-sm italic text-amber-700">{meal.recipe_title}</p>
         )}
 
+        {/* Pre-fill summary for generic meals */}
+        {meal.style === 'generic' && prefillNames.length > 0 && (
+          <p className="mb-2 text-xs text-stone-400">
+            {prefillNames.slice(0, 4).join(', ')}
+            {prefillNames.length > 4 && ` +${prefillNames.length - 4} more`}
+          </p>
+        )}
+
         <div className="flex items-center gap-3 text-xs text-stone-500">
-          <span>👥 {attendanceCount} attending</span>
-          {leadMember && <span>🍳 {leadMember.display_name}</span>}
+          <span>{attendanceCount} attending</span>
+          {leadMember && <span>Lead: {leadMember.display_name}</span>}
           {helperMembers.length > 0 && (
             <span>
-              🤝 {helperMembers.map((m) => m!.display_name).join(', ')}
+              Helpers: {helperMembers.map((m) => m!.display_name).join(', ')}
             </span>
           )}
         </div>

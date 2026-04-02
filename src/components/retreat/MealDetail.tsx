@@ -5,8 +5,10 @@ import {
   useAddMealAssignment,
   useRemoveMealAssignment,
   useAttendance,
+  useRetreatMembers,
   useAddShoppingItem,
 } from '../../lib/queries'
+import { useAuth } from '../layout/AuthGuard'
 import type { Meal, RetreatMember, MealStyle } from '../../types'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
@@ -19,6 +21,7 @@ type MealDetailProps = {
 }
 
 export default function MealDetail({ meal, retreatId, members, onClose }: MealDetailProps) {
+  const { user } = useAuth()
   const [label, setLabel] = useState(meal.label)
   const [time, setTime] = useState(meal.time)
   const [style, setStyle] = useState<MealStyle>(meal.style)
@@ -28,6 +31,8 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
   const [ingredientQty, setIngredientQty] = useState('')
 
   const updateMeal = useUpdateMeal()
+  const { data: allMembers = [] } = useRetreatMembers(retreatId)
+  const currentMember = allMembers.find((m) => m.user_id === user.id)
   const { data: assignments = [] } = useMealAssignments(meal.id)
   const addAssignment = useAddMealAssignment()
   const removeAssignment = useRemoveMealAssignment()
@@ -84,6 +89,7 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
       quantity: ingredientQty.trim() || undefined,
       category: 'ingredients',
       meal_id: meal.id,
+      added_by_member_id: currentMember?.id || null,
     })
     setIngredientName('')
     setIngredientQty('')

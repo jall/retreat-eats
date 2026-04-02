@@ -8,6 +8,7 @@ import {
   useAddShoppingItem,
   useRemoveShoppingItem,
 } from '../../lib/queries'
+import { useAuth } from '../layout/AuthGuard'
 import { generateShoppingList, mergeQuantities } from '../../lib/shopping-aggregator'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
@@ -17,6 +18,7 @@ type ShoppingListProps = {
 }
 
 export default function ShoppingList({ retreatId }: ShoppingListProps) {
+  const { user } = useAuth()
   const { data: days = [] } = useRetreatDays(retreatId)
   const { data: meals = [] } = useMeals(retreatId)
   const { data: attendance = [] } = useAttendance(retreatId)
@@ -28,8 +30,9 @@ export default function ShoppingList({ retreatId }: ShoppingListProps) {
   const [showList, setShowList] = useState(false)
   const [newName, setNewName] = useState('')
   const [newQty, setNewQty] = useState('')
-  const [newCategory, setNewCategory] = useState('misc')
   const [copied, setCopied] = useState(false)
+
+  const currentMember = members.find((m) => m.user_id === user.id)
 
   // Allergies banner
   const allAllergies = [...new Set(members.map((m) => m.allergies).filter(Boolean))]
@@ -50,7 +53,12 @@ export default function ShoppingList({ retreatId }: ShoppingListProps) {
     e.preventDefault()
     if (!newName.trim()) return
     addItem.mutate(
-      { retreat_id: retreatId, name: newName.trim(), quantity: newQty.trim() || undefined, category: newCategory },
+      {
+        retreat_id: retreatId,
+        name: newName.trim(),
+        quantity: newQty.trim() || undefined,
+        added_by_member_id: currentMember?.id || null,
+      },
       { onSuccess: () => { setNewName(''); setNewQty('') } }
     )
   }
@@ -171,18 +179,6 @@ export default function ShoppingList({ retreatId }: ShoppingListProps) {
             onChange={(e) => setNewQty(e.target.value)}
             className="w-24"
           />
-          <select
-            value={newCategory}
-            onChange={(e) => setNewCategory(e.target.value)}
-            className="rounded-lg border border-stone-300 bg-white px-2 py-2 text-sm text-stone-900 focus:border-green-500 focus:outline-none"
-          >
-            <option value="produce">Produce</option>
-            <option value="bakery">Bakery</option>
-            <option value="chilled">Chilled</option>
-            <option value="dry goods">Dry goods</option>
-            <option value="snacks">Snacks</option>
-            <option value="misc">Other</option>
-          </select>
           <Button type="submit" size="sm" disabled={addItem.isPending}>
             Add
           </Button>

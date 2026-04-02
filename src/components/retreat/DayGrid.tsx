@@ -1,7 +1,11 @@
-import { useRetreatDays, useMeals, useRetreatMembers, useAttendance } from '../../lib/queries'
+import { useState } from 'react'
+import { useRetreatDays, useMeals, useRetreatMembers, useAttendance, useAddMeal, useDeleteMeal } from '../../lib/queries'
 import { useAuth } from '../layout/AuthGuard'
+import { getPrefillsForMealType } from '../../lib/prefills'
 import type { Meal } from '../../types'
 import MealCard from './MealCard'
+import Button from '../ui/Button'
+import Input from '../ui/Input'
 
 type DayGridProps = {
   retreatId: string
@@ -13,6 +17,12 @@ export default function DayGrid({ retreatId }: DayGridProps) {
   const { data: meals = [], isLoading: mealsLoading } = useMeals(retreatId)
   const { data: members = [] } = useRetreatMembers(retreatId)
   const { data: attendance = [] } = useAttendance(retreatId)
+  const addMeal = useAddMeal()
+  const deleteMeal = useDeleteMeal()
+
+  const [addingMealForDay, setAddingMealForDay] = useState<string | null>(null)
+  const [newMealLabel, setNewMealLabel] = useState('')
+  const [newMealTime, setNewMealTime] = useState('12:00')
 
   const currentMember = members.find((m) => m.user_id === user.id)
   const isOrganiser = currentMember?.role === 'organiser'
@@ -41,6 +51,24 @@ export default function DayGrid({ retreatId }: DayGridProps) {
     })
   }
 
+  const handleAddMeal = (dayId: string) => {
+    if (!newMealLabel.trim()) return
+    addMeal.mutate(
+      { retreat_day_id: dayId, label: newMealLabel.trim(), time: newMealTime, retreatId },
+      {
+        onSuccess: () => {
+          setAddingMealForDay(null)
+          setNewMealLabel('')
+          setNewMealTime('12:00')
+        },
+      }
+    )
+  }
+
+  const handleDeleteMeal = (mealId: string) => {
+    deleteMeal.mutate({ id: mealId, retreatId })
+  }
+
   return (
     <div className="space-y-6">
       {mealsByDay.map(({ day, meals: dayMeals }) => (
@@ -50,17 +78,46 @@ export default function DayGrid({ retreatId }: DayGridProps) {
               {formatDate(day.date)}
             </h2>
             {isOrganiser && (
-              <button className="text-sm font-medium text-green-700 hover:text-green-800">
+              <button
+                onClick={() => setAddingMealForDay(addingMealForDay === day.id ? null : day.id)}
+                className="text-sm font-medium text-green-700 hover:text-green-800"
+              >
                 + Add meal
               </button>
             )}
           </div>
+
+          {/* Add meal form */}
+          {addingMealForDay === day.id && (
+            <div className="mb-3 flex items-end gap-2 rounded-lg border border-dashed border-stone-300 bg-stone-50 p-3">
+              <Input
+                label="Label"
+                placeholder="e.g. Brunch"
+                value={newMealLabel}
+                onChange={(e) => setNewMealLabel(e.target.value)}
+              />
+              <Input
+                label="Time"
+                type="time"
+                value={newMealTime}
+                onChange={(e) => setNewMealTime(e.target.value)}
+              />
+              <Button size="sm" onClick={() => handleAddMeal(day.id)} disabled={addMeal.isPending}>
+                Add
+              </Button>
+              <Button size="sm" variant="secondary" onClick={() => setAddingMealForDay(null)}>
+                Cancel
+              </Button>
+            </div>
+          )}
+
           {dayMeals.length === 0 ? (
             <p className="text-sm text-stone-400 italic">No meals planned yet</p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {dayMeals.map((meal: Meal) => {
                 const mealAttendance = attendance.filter((a) => a.meal_id === meal.id)
+                const prefills = meal.style === 'generic' ? getPrefillsForMealType(meal.label) : []
                 return (
                   <MealCard
                     key={meal.id}
@@ -68,6 +125,9 @@ export default function DayGrid({ retreatId }: DayGridProps) {
                     retreatId={retreatId}
                     members={members}
                     attendanceCount={mealAttendance.length}
+                    prefillNames={prefills.map((p) => p.name)}
+                    isOrganiser={isOrganiser}
+                    onDelete={() => handleDeleteMeal(meal.id)}
                   />
                 )
               })}
