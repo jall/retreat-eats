@@ -1,6 +1,9 @@
 [build]
-  command = "npx supabase link --project-ref $SUPABASE_PROJECT_ID && npx supabase db push && npm run build"
+  command = "npm run build"
   publish = "dist"
+
+[context.production]
+  command = "npx supabase link --project-ref $SUPABASE_PROJECT_ID && npx supabase db push && npm run build"
 
 # SPA fallback - route all paths to index.html
 [[redirects]]
