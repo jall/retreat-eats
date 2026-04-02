@@ -17,7 +17,6 @@ export default function RetreatDashboard() {
   const { data: retreat, isLoading } = useRetreat(id!)
   const { data: members = [] } = useRetreatMembers(id!)
   const [activeTab, setActiveTab] = useState<Tab>('schedule')
-  const [showJoinCode, setShowJoinCode] = useState(false)
 
   const currentMember = members.find((m) => m.user_id === user.id)
 
@@ -67,19 +66,10 @@ export default function RetreatDashboard() {
             </p>
           </div>
           <div className="text-right">
-            <button
-              onClick={() => setShowJoinCode(!showJoinCode)}
-              className="text-sm font-medium text-green-700 hover:text-green-800"
-            >
-              {showJoinCode ? 'Hide' : 'Show'} join code
-            </button>
-            {showJoinCode && (
-              <div className="mt-1">
-                <code className="rounded bg-stone-100 px-3 py-1 text-lg font-bold text-stone-800">
-                  {retreat.join_code}
-                </code>
-              </div>
-            )}
+            <p className="text-xs text-stone-400">Join code</p>
+            <code className="rounded bg-stone-100 px-3 py-1 text-lg font-bold text-stone-800">
+              {retreat.join_code}
+            </code>
           </div>
         </div>
 

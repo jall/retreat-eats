@@ -133,19 +133,25 @@ function generateJoinCode(): string {
 
 function dateRange(start: string, end: string): string[] {
   const dates: string[] = []
-  const current = new Date(start + 'T00:00:00')
-  const last = new Date(end + 'T00:00:00')
+  // Parse as plain date parts to avoid timezone shifts
+  const [sy, sm, sd] = start.split('-').map(Number)
+  const [ey, em, ed] = end.split('-').map(Number)
+  const current = new Date(sy, sm - 1, sd)
+  const last = new Date(ey, em - 1, ed)
   while (current <= last) {
-    dates.push(current.toISOString().slice(0, 10))
+    const y = current.getFullYear()
+    const m = String(current.getMonth() + 1).padStart(2, '0')
+    const d = String(current.getDate()).padStart(2, '0')
+    dates.push(`${y}-${m}-${d}`)
     current.setDate(current.getDate() + 1)
   }
   return dates
 }
 
 const DEFAULT_MEALS = [
-  { label: 'Breakfast', time: '08:00' },
-  { label: 'Lunch', time: '12:30' },
-  { label: 'Dinner', time: '19:00' },
+  { label: 'Breakfast', time: '08:00', style: 'generic' as const },
+  { label: 'Lunch', time: '12:30', style: 'generic' as const },
+  { label: 'Dinner', time: '19:00', style: 'assigned_recipe' as const },
 ]
 
 export function useCreateRetreat() {
@@ -189,7 +195,7 @@ export function useCreateRetreat() {
             retreat_day_id: day.id,
             label: m.label,
             time: m.time,
-            style: 'generic' as const,
+            style: m.style,
           }))
         )
         await supabase.from('meals').insert(mealRows)
@@ -283,6 +289,41 @@ export function useToggleAttendance() {
   })
 }
 
+export function useAddMeal() {
+  const qc = useQueryClient()
+  return useMutation<
+    Meal,
+    Error,
+    { retreat_day_id: string; label: string; time: string; style?: string; retreatId: string }
+  >({
+    mutationFn: async ({ retreat_day_id, label, time, style }) => {
+      const { data, error } = await supabase
+        .from('meals')
+        .insert({ retreat_day_id, label, time, style: style || 'generic' })
+        .select()
+        .single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: (_, { retreatId }) => {
+      qc.invalidateQueries({ queryKey: ['meals', retreatId] })
+    },
+  })
+}
+
+export function useDeleteMeal() {
+  const qc = useQueryClient()
+  return useMutation<void, Error, { id: string; retreatId: string }>({
+    mutationFn: async ({ id }) => {
+      const { error } = await supabase.from('meals').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: (_, { retreatId }) => {
+      qc.invalidateQueries({ queryKey: ['meals', retreatId] })
+    },
+  })
+}
+
 export function useUpdateMeal() {
   const qc = useQueryClient()
   return useMutation<
@@ -349,20 +390,19 @@ export function useAddShoppingItem() {
   return useMutation<
     ShoppingItem,
     Error,
-    { retreat_id: string; name: string; quantity?: string; category?: string; meal_id?: string | null }
+    { retreat_id: string; name: string; quantity?: string; category?: string; meal_id?: string | null; added_by_member_id?: string | null }
   >({
     mutationFn: async (input) => {
-      const { data: { user } } = await supabase.auth.getUser()
       const { data, error } = await supabase
         .from('shopping_items')
         .insert({
           retreat_id: input.retreat_id,
           name: input.name,
           quantity: input.quantity || null,
-          category: input.category || 'other',
+          category: input.category || 'misc',
           meal_id: input.meal_id || null,
           is_prefill: false,
-          added_by: user?.id || null,
+          added_by: input.added_by_member_id || null,
         })
         .select()
         .single()
@@ -396,13 +436,15 @@ export function useAddMember() {
   return useMutation<
     RetreatMember,
     Error,
-    { retreat_id: string; display_name: string; email: string }
+    { retreat_id: string; display_name: string; email?: string }
   >({
     mutationFn: async (input) => {
       const { data, error } = await supabase
         .from('retreat_members')
         .insert({
-          ...input,
+          retreat_id: input.retreat_id,
+          display_name: input.display_name,
+          email: input.email || '',
           user_id: null,
           role: 'participant',
           allergies: '',
