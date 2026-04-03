@@ -6,10 +6,13 @@ import {
   useRemoveMealAssignment,
   useAttendance,
   useRetreatMembers,
+  useShoppingItems,
   useAddShoppingItem,
+  useRemoveShoppingItem,
 } from '../../lib/queries'
 import { useAuth } from '../layout/AuthGuard'
 import { getPrefillsForMealType } from '../../lib/prefills'
+import { EXCLUDED_MARKER } from '../../lib/shopping-aggregator'
 import type { Meal, RetreatMember, MealStyle } from '../../types'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
@@ -38,7 +41,9 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
   const addAssignment = useAddMealAssignment()
   const removeAssignment = useRemoveMealAssignment()
   const { data: attendance = [] } = useAttendance(retreatId)
+  const { data: allShoppingItems = [] } = useShoppingItems(retreatId)
   const addShoppingItem = useAddShoppingItem()
+  const removeShoppingItem = useRemoveShoppingItem()
 
   const mealAttendees = attendance.filter((a) => a.meal_id === meal.id)
   const attendeeMembers = mealAttendees
@@ -48,6 +53,17 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
 
   const lead = assignments.find((a) => a.duty === 'lead')
   const helpers = assignments.filter((a) => a.duty === 'helper')
+
+  // Pre-fill exclusions for this retreat
+  const exclusions = allShoppingItems.filter(
+    (i) => i.is_prefill && i.quantity === EXCLUDED_MARKER
+  )
+  const excludedNames = new Set(exclusions.map((i) => i.name.toLowerCase()))
+
+  // Custom items added to this specific meal
+  const mealCustomItems = allShoppingItems.filter(
+    (i) => i.meal_id === meal.id && !i.is_prefill
+  )
 
   const handleSave = () => {
     updateMeal.mutate({
@@ -95,6 +111,33 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
     setIngredientName('')
     setIngredientQty('')
   }
+
+  const handleTogglePrefill = (prefillName: string) => {
+    const isExcluded = excludedNames.has(prefillName.toLowerCase())
+    if (isExcluded) {
+      // Re-include: remove the exclusion marker
+      const exclusion = exclusions.find(
+        (i) => i.name.toLowerCase() === prefillName.toLowerCase()
+      )
+      if (exclusion) {
+        removeShoppingItem.mutate({ id: exclusion.id, retreat_id: retreatId })
+      }
+    } else {
+      // Exclude: add an exclusion marker
+      addShoppingItem.mutate({
+        retreat_id: retreatId,
+        name: prefillName,
+        quantity: EXCLUDED_MARKER,
+        category: 'excluded',
+        meal_id: null,
+        added_by_member_id: currentMember?.id || null,
+        is_prefill: true,
+      })
+    }
+  }
+
+  const headcount = mealAttendees.length
+  const prefills = getPrefillsForMealType(label)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -152,33 +195,91 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
             </div>
           </div>
 
-          {/* Generic meal pre-fills */}
-          {style === 'generic' && (() => {
-            const prefills = getPrefillsForMealType(label)
-            const headcount = mealAttendees.length
-            return prefills.length > 0 ? (
-              <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
-                <p className="mb-2 text-sm font-medium text-stone-700">
-                  Auto-included ingredients {headcount > 0 ? `(scaled for ${headcount})` : '(set attendance to see quantities)'}
-                </p>
+          {/* Generic meal: editable pre-fills + custom items */}
+          {style === 'generic' && (
+            <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
+              <p className="mb-2 text-sm font-medium text-stone-700">
+                Ingredients {headcount > 0 ? `(scaled for ${headcount})` : '(set attendance to see quantities)'}
+              </p>
+              {prefills.length > 0 ? (
                 <div className="space-y-1">
-                  {prefills.map((p) => (
-                    <div key={p.name} className="flex justify-between text-sm">
-                      <span className="text-stone-600">{p.name}</span>
-                      <span className="text-stone-400">{headcount > 0 ? p.scalingFn(headcount) : '—'}</span>
+                  {prefills.map((p) => {
+                    const isExcluded = excludedNames.has(p.name.toLowerCase())
+                    return (
+                      <label
+                        key={p.name}
+                        className={`flex items-center justify-between text-sm cursor-pointer ${
+                          isExcluded ? 'opacity-50' : ''
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={!isExcluded}
+                            onChange={() => handleTogglePrefill(p.name)}
+                            className="h-3.5 w-3.5 rounded border-stone-300 text-green-700 focus:ring-green-500"
+                          />
+                          <span className={isExcluded ? 'line-through text-stone-400' : 'text-stone-600'}>
+                            {p.name}
+                          </span>
+                        </div>
+                        <span className="text-stone-400">
+                          {headcount > 0 && !isExcluded ? p.scalingFn(headcount) : '—'}
+                        </span>
+                      </label>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-stone-400 italic">
+                  No pre-fill template for "{label}". Rename to include "breakfast" or "lunch" for defaults.
+                </p>
+              )}
+
+              {/* Custom items for this meal */}
+              {mealCustomItems.length > 0 && (
+                <div className="mt-3 border-t border-stone-200 pt-2">
+                  <p className="mb-1 text-xs font-medium text-stone-500">Custom additions</p>
+                  {mealCustomItems.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between text-sm">
+                      <span className="text-stone-600">{item.name}</span>
+                      <div className="flex items-center gap-2">
+                        {item.quantity && <span className="text-stone-400">{item.quantity}</span>}
+                        <button
+                          onClick={() => removeShoppingItem.mutate({ id: item.id, retreat_id: retreatId })}
+                          className="text-xs text-red-500 hover:text-red-700"
+                        >
+                          &times;
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
-                <p className="mt-2 text-xs text-stone-400">
-                  These are added automatically to the shopping list based on attendance.
-                </p>
-              </div>
-            ) : (
-              <p className="text-sm text-stone-400 italic">
-                No pre-fill template for "{label}" meals. Rename to include "breakfast" or "lunch" for auto-ingredients.
+              )}
+
+              {/* Add custom item */}
+              <form onSubmit={handleAddIngredient} className="mt-3 flex gap-2">
+                <Input
+                  placeholder="Add custom item"
+                  value={ingredientName}
+                  onChange={(e) => setIngredientName(e.target.value)}
+                />
+                <Input
+                  placeholder="Qty"
+                  value={ingredientQty}
+                  onChange={(e) => setIngredientQty(e.target.value)}
+                  className="w-24"
+                />
+                <Button type="submit" size="sm">
+                  Add
+                </Button>
+              </form>
+
+              <p className="mt-2 text-xs text-stone-400">
+                Uncheck items to exclude from the shopping list for this retreat. Changes apply to all {label.toLowerCase()} meals.
               </p>
-            )
-          })()}
+            </div>
+          )}
 
           {/* Recipe fields */}
           {style === 'assigned_recipe' && (
@@ -202,7 +303,27 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
                 />
               </div>
 
-              {/* Add ingredient */}
+              {/* Recipe ingredients */}
+              {mealCustomItems.length > 0 && (
+                <div>
+                  <p className="mb-1 text-sm font-medium text-stone-700">Ingredients</p>
+                  {mealCustomItems.map((item) => (
+                    <div key={item.id} className="flex items-center justify-between text-sm py-0.5">
+                      <span className="text-stone-600">{item.name}</span>
+                      <div className="flex items-center gap-2">
+                        {item.quantity && <span className="text-stone-400">{item.quantity}</span>}
+                        <button
+                          onClick={() => removeShoppingItem.mutate({ id: item.id, retreat_id: retreatId })}
+                          className="text-xs text-red-500 hover:text-red-700"
+                        >
+                          &times;
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <form onSubmit={handleAddIngredient} className="flex gap-2">
                 <Input
                   placeholder="Ingredient name"
