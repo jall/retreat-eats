@@ -60,8 +60,8 @@ export default function MealCard({ meal, retreatId, members, attendanceCount, pr
                   e.stopPropagation()
                   if (confirm(`Delete ${meal.label}?`)) onDelete()
                 }}
-                className="ml-1 rounded p-1 text-stone-400 hover:bg-red-50 hover:text-red-500"
-                title="Delete meal"
+                className="ml-1 flex h-8 w-8 items-center justify-center rounded-lg text-lg text-stone-400 hover:bg-red-50 hover:text-red-500"
+                aria-label={`Delete ${meal.label}`}
               >
                 &times;
               </button>

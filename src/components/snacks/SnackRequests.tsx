@@ -79,7 +79,7 @@ export default function SnackRequests({ retreatId }: SnackRequestsProps) {
               </div>
               <button
                 onClick={() => removeItem.mutate({ id: item.id, retreat_id: retreatId })}
-                className="text-xs text-red-500 hover:text-red-700"
+                className="rounded px-2 py-1 text-xs text-red-500 hover:bg-red-50 hover:text-red-700"
               >
                 Remove
               </button>
@@ -95,23 +95,28 @@ export default function SnackRequests({ retreatId }: SnackRequestsProps) {
       {/* Add form */}
       <div className="rounded-lg border border-dashed border-stone-300 bg-stone-50 p-4">
         <h3 className="mb-3 text-sm font-semibold text-stone-700">Add a snack request</h3>
-        <form onSubmit={handleAdd} className="flex gap-2">
+        <form onSubmit={handleAdd} className="flex flex-col gap-2 sm:flex-row">
           <Input
             placeholder="e.g. Popcorn"
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             required
           />
-          <Input
-            placeholder="Qty (optional)"
-            value={newQty}
-            onChange={(e) => setNewQty(e.target.value)}
-            className="w-32"
-          />
-          <Button type="submit" size="sm" disabled={addItem.isPending}>
-            Add
-          </Button>
+          <div className="flex gap-2">
+            <Input
+              placeholder="Qty (optional)"
+              value={newQty}
+              onChange={(e) => setNewQty(e.target.value)}
+              className="w-32"
+            />
+            <Button type="submit" size="sm" disabled={addItem.isPending}>
+              Add
+            </Button>
+          </div>
         </form>
+        {addItem.isError && (
+          <p className="mt-2 text-sm text-red-600">{addItem.error.message}</p>
+        )}
       </div>
 
       {/* Suggestions */}

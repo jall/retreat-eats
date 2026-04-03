@@ -9,11 +9,17 @@ export default function CreateRetreatForm() {
   const [name, setName] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [dateError, setDateError] = useState('')
   const navigate = useNavigate()
   const createRetreat = useCreateRetreat()
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    if (startDate && endDate && endDate < startDate) {
+      setDateError('End date must be on or after start date')
+      return
+    }
+    setDateError('')
     createRetreat.mutate(
       { name, start_date: startDate, end_date: endDate },
       {
@@ -50,6 +56,9 @@ export default function CreateRetreatForm() {
             required
           />
         </div>
+        {dateError && (
+          <p className="text-sm text-red-600">{dateError}</p>
+        )}
         {createRetreat.isError && (
           <p className="text-sm text-red-600">
             {(createRetreat.error as Error).message}

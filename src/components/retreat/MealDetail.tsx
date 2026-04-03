@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   useUpdateMeal,
   useMealAssignments,
@@ -138,15 +138,35 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
 
   const headcount = mealAttendees.length
   const prefills = getPrefillsForMealType(label)
+  const dialogRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    dialogRef.current?.focus()
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClose])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="meal-dialog-title"
+    >
+      <div
+        ref={dialogRef}
+        tabIndex={-1}
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl bg-white p-6 shadow-xl outline-none"
+      >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-stone-800">Edit Meal</h2>
+          <h2 id="meal-dialog-title" className="text-lg font-bold text-stone-800">Edit Meal</h2>
           <button
             onClick={onClose}
-            className="text-stone-400 hover:text-stone-600"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-lg text-stone-400 hover:bg-stone-100 hover:text-stone-600"
             aria-label="Close"
           >
             &times;
@@ -357,7 +377,7 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
                 focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
             >
               <option value="">None</option>
-              {members.map((m) => (
+              {[...members].sort((a, b) => a.display_name.localeCompare(b.display_name)).map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.display_name}
                 </option>

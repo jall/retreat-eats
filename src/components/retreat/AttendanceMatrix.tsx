@@ -67,26 +67,32 @@ export default function AttendanceMatrix({ retreatId }: AttendanceMatrixProps) {
   }
 
   if (allMealsOrdered.length === 0) {
-    return <p className="py-12 text-center text-stone-400">No meals to show attendance for.</p>
+    return (
+      <p className="py-12 text-center text-stone-400">
+        No meals to show attendance for. Add meals in the Schedule tab first.
+      </p>
+    )
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr>
-            <th className="sticky left-0 z-10 bg-white px-3 py-2 text-left font-medium text-stone-600">
-              Member
-            </th>
-            <th className="px-2 py-2 text-center font-medium text-stone-600 text-xs">
-              All
-            </th>
-            <th className="bg-white px-3 py-2 text-left font-medium text-stone-600">
-              Allergies
-            </th>
+    <div className="-mx-4 sm:mx-0">
+      <div className="overflow-x-auto px-4 sm:px-0">
+        <table className="w-full text-sm">
+          <thead>
+            <tr>
+              <th scope="col" className="sticky left-0 z-10 bg-white px-3 py-2 text-left font-medium text-stone-600">
+                Member
+              </th>
+              <th scope="col" className="px-2 py-2 text-center font-medium text-stone-600 text-xs">
+                All
+              </th>
+              <th scope="col" className="bg-white px-3 py-2 text-left font-medium text-stone-600">
+                Allergies
+              </th>
             {mealsByDay.map(({ day, meals: dm }) =>
               dm.map((meal, i) => (
                 <th
+                  scope="col"
                   key={meal.id}
                   className="px-2 py-2 text-center font-medium text-stone-600"
                 >
@@ -143,7 +149,9 @@ export default function AttendanceMatrix({ retreatId }: AttendanceMatrixProps) {
             ))}
           </tr>
         </tbody>
-      </table>
+        </table>
+      </div>
+      <p className="mt-1 text-xs text-stone-400 px-4 sm:hidden sm:px-0">Scroll sideways to see all meals →</p>
     </div>
   )
 }

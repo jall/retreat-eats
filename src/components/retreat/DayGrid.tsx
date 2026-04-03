@@ -89,25 +89,32 @@ export default function DayGrid({ retreatId }: DayGridProps) {
 
           {/* Add meal form */}
           {addingMealForDay === day.id && (
-            <div className="mb-3 flex items-end gap-2 rounded-lg border border-dashed border-stone-300 bg-stone-50 p-3">
-              <Input
-                label="Label"
-                placeholder="e.g. Brunch"
-                value={newMealLabel}
-                onChange={(e) => setNewMealLabel(e.target.value)}
-              />
-              <Input
-                label="Time"
-                type="time"
-                value={newMealTime}
-                onChange={(e) => setNewMealTime(e.target.value)}
-              />
-              <Button size="sm" onClick={() => handleAddMeal(day.id)} disabled={addMeal.isPending}>
-                Add
-              </Button>
-              <Button size="sm" variant="secondary" onClick={() => setAddingMealForDay(null)}>
-                Cancel
-              </Button>
+            <div className="mb-3 rounded-lg border border-dashed border-stone-300 bg-stone-50 p-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+                <Input
+                  label="Label"
+                  placeholder="e.g. Brunch"
+                  value={newMealLabel}
+                  onChange={(e) => setNewMealLabel(e.target.value)}
+                />
+                <Input
+                  label="Time"
+                  type="time"
+                  value={newMealTime}
+                  onChange={(e) => setNewMealTime(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={() => handleAddMeal(day.id)} disabled={addMeal.isPending}>
+                    Add
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={() => setAddingMealForDay(null)}>
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+              {addMeal.isError && (
+                <p className="mt-2 text-sm text-red-600">{addMeal.error.message}</p>
+              )}
             </div>
           )}
 

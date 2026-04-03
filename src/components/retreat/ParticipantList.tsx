@@ -90,16 +90,17 @@ export default function ParticipantList({ retreatId }: ParticipantListProps) {
 
                 {/* Allergies */}
                 {editingAllergies === member.id ? (
-                  <div className="mt-2 flex items-center gap-2">
-                    <input
-                      className="rounded border border-stone-300 px-2 py-1 text-sm focus:border-green-500 focus:outline-none"
-                      value={allergiesValue}
-                      onChange={(e) => setAllergiesValue(e.target.value)}
-                      placeholder="e.g. nuts, gluten"
-                    />
-                    <Button size="sm" onClick={() => handleSaveAllergies(member.id)}>
-                      Save
-                    </Button>
+                  <div className="mt-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        className="rounded border border-stone-300 px-2 py-1 text-sm focus:border-green-500 focus:outline-none"
+                        value={allergiesValue}
+                        onChange={(e) => setAllergiesValue(e.target.value)}
+                        placeholder="e.g. nuts, gluten"
+                      />
+                      <Button size="sm" onClick={() => handleSaveAllergies(member.id)} disabled={updateMember.isPending}>
+                        Save
+                      </Button>
                     <Button
                       size="sm"
                       variant="secondary"
@@ -107,6 +108,10 @@ export default function ParticipantList({ retreatId }: ParticipantListProps) {
                     >
                       Cancel
                     </Button>
+                    </div>
+                    {updateMember.isError && (
+                      <p className="mt-1 text-xs text-red-600">{updateMember.error.message}</p>
+                    )}
                   </div>
                 ) : (
                   <div className="mt-1 flex items-center gap-2">
@@ -123,7 +128,7 @@ export default function ParticipantList({ retreatId }: ParticipantListProps) {
                           setEditingAllergies(member.id)
                           setAllergiesValue(member.allergies)
                         }}
-                        className="text-xs text-green-700 hover:text-green-800"
+                        className="rounded px-2 py-1 text-xs text-green-700 hover:bg-green-50 hover:text-green-800"
                       >
                         Edit
                       </button>
