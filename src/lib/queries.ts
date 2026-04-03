@@ -393,7 +393,7 @@ export function useAddShoppingItem() {
   return useMutation<
     ShoppingItem,
     Error,
-    { retreat_id: string; name: string; quantity?: string; category?: string; meal_id?: string | null; added_by_member_id?: string | null }
+    { retreat_id: string; name: string; quantity?: string; category?: string; meal_id?: string | null; added_by_member_id?: string | null; is_prefill?: boolean }
   >({
     mutationFn: async (input) => {
       const { data, error } = await supabase
@@ -404,7 +404,7 @@ export function useAddShoppingItem() {
           quantity: input.quantity || null,
           category: input.category || 'misc',
           meal_id: input.meal_id || null,
-          is_prefill: false,
+          is_prefill: input.is_prefill ?? false,
           added_by: input.added_by_member_id || null,
         })
         .select()

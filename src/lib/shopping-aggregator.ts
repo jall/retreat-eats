@@ -1,20 +1,34 @@
 import type { Meal, Attendance, ShoppingItem, RetreatDay } from '../types'
 import { getPrefillsForMealType, SNACK_PREFILLS } from './prefills'
 
-type AggregatedItem = {
+export type AggregatedItem = {
   name: string
   category: string
   quantities: string[]
   is_prefill: boolean
 }
 
+export const EXCLUDED_MARKER = 'EXCLUDED'
+
 export function generateShoppingList(
   days: RetreatDay[],
   meals: Meal[],
   attendance: Attendance[],
-  manualItems: ShoppingItem[]
+  allItems: ShoppingItem[]
 ): AggregatedItem[] {
   const aggregation = new Map<string, AggregatedItem>()
+
+  // Build set of excluded prefill names (items marked EXCLUDED)
+  const excludedNames = new Set(
+    allItems
+      .filter((i) => i.is_prefill && i.quantity === EXCLUDED_MARKER)
+      .map((i) => i.name.toLowerCase())
+  )
+
+  // Manual items are non-prefill items, or prefills that aren't exclusion markers
+  const manualItems = allItems.filter(
+    (i) => !i.is_prefill || (i.is_prefill && i.quantity !== EXCLUDED_MARKER)
+  )
 
   function addItem(name: string, category: string, quantity: string, is_prefill: boolean) {
     const key = name.toLowerCase()
@@ -26,7 +40,7 @@ export function generateShoppingList(
     }
   }
 
-  // Generic meals: apply prefills based on attendance
+  // Generic meals: apply prefills based on attendance (skip excluded items)
   for (const meal of meals) {
     const mealAttendance = attendance.filter((a) => a.meal_id === meal.id)
     const headcount = mealAttendance.length
@@ -34,12 +48,14 @@ export function generateShoppingList(
     if (meal.style === 'generic' && headcount > 0) {
       const prefills = getPrefillsForMealType(meal.label)
       for (const prefill of prefills) {
-        addItem(prefill.name, prefill.category, prefill.scalingFn(headcount), true)
+        if (!excludedNames.has(prefill.name.toLowerCase())) {
+          addItem(prefill.name, prefill.category, prefill.scalingFn(headcount), true)
+        }
       }
     }
   }
 
-  // Snack prefills based on average daily headcount
+  // Snack prefills based on average daily headcount (skip excluded)
   if (days.length > 0) {
     const dailyHeadcounts = days.map((day) => {
       const dayMeals = meals.filter((m) => m.retreat_day_id === day.id)
@@ -56,14 +72,15 @@ export function generateShoppingList(
     )
     if (avgHeadcount > 0) {
       for (const prefill of SNACK_PREFILLS) {
-        // Scale snacks for total days
-        const totalQuantity = prefill.scalingFn(avgHeadcount * days.length)
-        addItem(prefill.name, prefill.category, totalQuantity, true)
+        if (!excludedNames.has(prefill.name.toLowerCase())) {
+          const totalQuantity = prefill.scalingFn(avgHeadcount * days.length)
+          addItem(prefill.name, prefill.category, totalQuantity, true)
+        }
       }
     }
   }
 
-  // Manual items (from assigned_recipe meals and snack requests)
+  // Manual items (from assigned_recipe meals, snack requests, and custom generic additions)
   for (const item of manualItems) {
     addItem(item.name, item.category, item.quantity || '', false)
   }
@@ -76,7 +93,6 @@ export function generateShoppingList(
 }
 
 export function mergeQuantities(quantities: string[]): string {
-  // Try to sum numeric quantities with the same unit
   const unitMap = new Map<string, number>()
   const nonNumeric: string[] = []
 
