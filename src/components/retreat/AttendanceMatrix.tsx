@@ -51,6 +51,21 @@ export default function AttendanceMatrix({ retreatId }: AttendanceMatrixProps) {
     toggleAttendance.mutate({ mealId, memberId, attending, retreatId })
   }
 
+  const memberAttendingAll = (memberId: string) =>
+    allMealsOrdered.length > 0 && allMealsOrdered.every((meal) => isAttending(meal.id, memberId))
+
+  const handleToggleAll = (memberId: string) => {
+    const shouldAttendAll = !memberAttendingAll(memberId)
+    for (const meal of allMealsOrdered) {
+      const currently = isAttending(meal.id, memberId)
+      if (shouldAttendAll && !currently) {
+        toggleAttendance.mutate({ mealId: meal.id, memberId, attending: true, retreatId })
+      } else if (!shouldAttendAll && currently) {
+        toggleAttendance.mutate({ mealId: meal.id, memberId, attending: false, retreatId })
+      }
+    }
+  }
+
   if (allMealsOrdered.length === 0) {
     return <p className="py-12 text-center text-stone-400">No meals to show attendance for.</p>
   }
@@ -63,7 +78,10 @@ export default function AttendanceMatrix({ retreatId }: AttendanceMatrixProps) {
             <th className="sticky left-0 z-10 bg-white px-3 py-2 text-left font-medium text-stone-600">
               Member
             </th>
-            <th className="sticky left-[120px] z-10 bg-white px-3 py-2 text-left font-medium text-stone-600">
+            <th className="px-2 py-2 text-center font-medium text-stone-600 text-xs">
+              All
+            </th>
+            <th className="bg-white px-3 py-2 text-left font-medium text-stone-600">
               Allergies
             </th>
             {mealsByDay.map(({ day, meals: dm }) =>
@@ -87,7 +105,16 @@ export default function AttendanceMatrix({ retreatId }: AttendanceMatrixProps) {
               <td className="sticky left-0 z-10 bg-white px-3 py-2 font-medium text-stone-800 whitespace-nowrap">
                 {member.display_name}
               </td>
-              <td className="sticky left-[120px] z-10 bg-white px-3 py-2 text-xs text-amber-700 whitespace-nowrap">
+              <td className="px-2 py-2 text-center">
+                <input
+                  type="checkbox"
+                  checked={memberAttendingAll(member.id)}
+                  onChange={() => handleToggleAll(member.id)}
+                  className="h-4 w-4 rounded border-stone-300 text-green-700 focus:ring-green-500"
+                  title="Toggle all meals"
+                />
+              </td>
+              <td className="bg-white px-3 py-2 text-xs text-amber-700 whitespace-nowrap">
                 {member.allergies || '-'}
               </td>
               {allMealsOrdered.map((meal) => (
@@ -107,7 +134,8 @@ export default function AttendanceMatrix({ retreatId }: AttendanceMatrixProps) {
             <td className="sticky left-0 z-10 bg-stone-50 px-3 py-2 text-sm font-semibold text-stone-700">
               Total
             </td>
-            <td className="sticky left-[120px] z-10 bg-stone-50 px-3 py-2" />
+            <td className="bg-stone-50 px-3 py-2" />
+            <td className="bg-stone-50 px-3 py-2" />
             {allMealsOrdered.map((meal) => (
               <td key={meal.id} className="px-2 py-2 text-center text-sm font-semibold text-green-800">
                 {headcount(meal.id)}
