@@ -73,13 +73,20 @@ export default function ParticipantList({ retreatId }: ParticipantListProps) {
                   >
                     {member.role}
                   </span>
-                  {!member.user_id && (
+                  {!member.user_id && member.email && (
                     <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
                       invited
                     </span>
                   )}
+                  {!member.user_id && !member.email && (
+                    <span className="rounded-full bg-stone-100 px-2 py-0.5 text-xs text-stone-500">
+                      not linked
+                    </span>
+                  )}
                 </div>
-                <p className="mt-0.5 text-sm text-stone-500">{member.email}</p>
+                {member.email && (
+                  <p className="mt-0.5 text-sm text-stone-500">{member.email}</p>
+                )}
 
                 {/* Allergies */}
                 {editingAllergies === member.id ? (
@@ -153,6 +160,9 @@ export default function ParticipantList({ retreatId }: ParticipantListProps) {
           {addMember.isError && (
             <p className="mt-2 text-sm text-red-600">{addMember.error.message}</p>
           )}
+          <p className="mt-2 text-xs text-stone-400">
+            Adding an email lets their account auto-link when they join with the code. No invite email is sent — share the join code manually.
+          </p>
         </div>
       )}
     </div>

@@ -17,7 +17,7 @@ export type RetreatMember = {
   retreat_id: string
   user_id: string | null
   display_name: string
-  email: string
+  email: string | null
   role: Role
   allergies: string
   created_at: string

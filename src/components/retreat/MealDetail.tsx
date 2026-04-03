@@ -9,6 +9,7 @@ import {
   useAddShoppingItem,
 } from '../../lib/queries'
 import { useAuth } from '../layout/AuthGuard'
+import { getPrefillsForMealType } from '../../lib/prefills'
 import type { Meal, RetreatMember, MealStyle } from '../../types'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
@@ -150,6 +151,34 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
               </button>
             </div>
           </div>
+
+          {/* Generic meal pre-fills */}
+          {style === 'generic' && (() => {
+            const prefills = getPrefillsForMealType(label)
+            const headcount = mealAttendees.length
+            return prefills.length > 0 ? (
+              <div className="rounded-lg border border-stone-200 bg-stone-50 p-3">
+                <p className="mb-2 text-sm font-medium text-stone-700">
+                  Auto-included ingredients {headcount > 0 ? `(scaled for ${headcount})` : '(set attendance to see quantities)'}
+                </p>
+                <div className="space-y-1">
+                  {prefills.map((p) => (
+                    <div key={p.name} className="flex justify-between text-sm">
+                      <span className="text-stone-600">{p.name}</span>
+                      <span className="text-stone-400">{headcount > 0 ? p.scalingFn(headcount) : '—'}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-stone-400">
+                  These are added automatically to the shopping list based on attendance.
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm text-stone-400 italic">
+                No pre-fill template for "{label}" meals. Rename to include "breakfast" or "lunch" for auto-ingredients.
+              </p>
+            )
+          })()}
 
           {/* Recipe fields */}
           {style === 'assigned_recipe' && (

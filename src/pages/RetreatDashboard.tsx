@@ -17,6 +17,7 @@ export default function RetreatDashboard() {
   const { data: retreat, isLoading } = useRetreat(id!)
   const { data: members = [] } = useRetreatMembers(id!)
   const [activeTab, setActiveTab] = useState<Tab>('schedule')
+  const [codeCopied, setCodeCopied] = useState(false)
 
   const currentMember = members.find((m) => m.user_id === user.id)
 
@@ -66,10 +67,22 @@ export default function RetreatDashboard() {
             </p>
           </div>
           <div className="text-right">
-            <p className="text-xs text-stone-400">Join code</p>
-            <code className="rounded bg-stone-100 px-3 py-1 text-lg font-bold text-stone-800">
-              {retreat.join_code}
-            </code>
+            <p className="text-xs text-stone-400">Join code (share with participants)</p>
+            <div className="mt-1 flex items-center gap-2">
+              <code className="rounded bg-stone-100 px-3 py-1 text-lg font-bold text-stone-800">
+                {retreat.join_code}
+              </code>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(retreat.join_code)
+                  setCodeCopied(true)
+                  setTimeout(() => setCodeCopied(false), 2000)
+                }}
+                className="rounded border border-stone-200 bg-white px-2 py-1 text-xs text-stone-600 hover:bg-stone-50"
+              >
+                {codeCopied ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
           </div>
         </div>
 

@@ -225,12 +225,15 @@ export function useJoinRetreat() {
       if (findError) throw new Error('Invalid join code')
 
       // Check if a member row already exists for this email (pre-added by organiser)
-      const { data: existing } = await supabase
-        .from('retreat_members')
-        .select('id')
-        .eq('retreat_id', retreat.id)
-        .eq('email', user.email || '')
-        .maybeSingle()
+      const userEmail = user.email || ''
+      const { data: existing } = userEmail
+        ? await supabase
+            .from('retreat_members')
+            .select('id')
+            .eq('retreat_id', retreat.id)
+            .eq('email', userEmail)
+            .maybeSingle()
+        : { data: null }
 
       if (existing) {
         // Link the pre-added member to this user
@@ -444,7 +447,7 @@ export function useAddMember() {
         .insert({
           retreat_id: input.retreat_id,
           display_name: input.display_name,
-          email: input.email || '',
+          email: input.email || null,
           user_id: null,
           role: 'participant',
           allergies: '',
