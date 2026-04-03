@@ -12,6 +12,22 @@ import type {
 
 // ── Query hooks ──────────────────────────────────────────────────────
 
+export function useMyRetreats() {
+  return useQuery<(Retreat & { role: string })[]>({
+    queryKey: ['my-retreats'],
+    queryFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return []
+      const { data, error } = await supabase
+        .from('retreat_members')
+        .select('role, retreats:retreat_id(*)')
+        .eq('user_id', user.id)
+      if (error) throw error
+      return (data ?? []).map((row: any) => ({ ...row.retreats, role: row.role }))
+    },
+  })
+}
+
 export function useRetreat(id: string) {
   return useQuery<Retreat>({
     queryKey: ['retreat', id],
@@ -205,6 +221,7 @@ export function useCreateRetreat() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['retreats'] })
+      qc.invalidateQueries({ queryKey: ['my-retreats'] })
     },
   })
 }
@@ -260,6 +277,7 @@ export function useJoinRetreat() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['retreat-members'] })
+      qc.invalidateQueries({ queryKey: ['my-retreats'] })
     },
   })
 }
