@@ -258,21 +258,23 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
               )}
 
               {/* Add custom item */}
-              <form onSubmit={handleAddIngredient} className="mt-3 flex gap-2">
+              <form onSubmit={handleAddIngredient} className="mt-3 flex flex-col gap-2 sm:flex-row">
                 <Input
                   placeholder="Add custom item"
                   value={ingredientName}
                   onChange={(e) => setIngredientName(e.target.value)}
                 />
-                <Input
-                  placeholder="Qty"
-                  value={ingredientQty}
-                  onChange={(e) => setIngredientQty(e.target.value)}
-                  className="w-24"
-                />
-                <Button type="submit" size="sm">
-                  Add
-                </Button>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Qty"
+                    value={ingredientQty}
+                    onChange={(e) => setIngredientQty(e.target.value)}
+                    className="w-24"
+                  />
+                  <Button type="submit" size="sm">
+                    Add
+                  </Button>
+                </div>
               </form>
 
               <p className="mt-2 text-xs text-stone-400">
@@ -324,21 +326,23 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
                 </div>
               )}
 
-              <form onSubmit={handleAddIngredient} className="flex gap-2">
+              <form onSubmit={handleAddIngredient} className="flex flex-col gap-2 sm:flex-row">
                 <Input
                   placeholder="Ingredient name"
                   value={ingredientName}
                   onChange={(e) => setIngredientName(e.target.value)}
                 />
-                <Input
-                  placeholder="Qty"
-                  value={ingredientQty}
-                  onChange={(e) => setIngredientQty(e.target.value)}
-                  className="w-24"
-                />
-                <Button type="submit" size="sm">
-                  Add
-                </Button>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Qty"
+                    value={ingredientQty}
+                    onChange={(e) => setIngredientQty(e.target.value)}
+                    className="w-24"
+                  />
+                  <Button type="submit" size="sm">
+                    Add
+                  </Button>
+                </div>
               </form>
             </>
           )}

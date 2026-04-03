@@ -140,7 +140,7 @@ export default function ParticipantList({ retreatId }: ParticipantListProps) {
       {isOrganiser && (
         <div className="rounded-lg border border-dashed border-stone-300 bg-stone-50 p-4">
           <h3 className="mb-3 text-sm font-semibold text-stone-700">Add a participant</h3>
-          <form onSubmit={handleAddMember} className="flex gap-2">
+          <form onSubmit={handleAddMember} className="flex flex-col gap-2 sm:flex-row">
             <Input
               placeholder="Name"
               value={newName}
