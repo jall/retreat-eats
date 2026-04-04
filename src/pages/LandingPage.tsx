@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { User } from '@supabase/supabase-js'
-import { useMyRetreats } from '../lib/queries'
+import { useMyRetreats, useDeleteRetreat } from '../lib/queries'
 import LoginForm from '../components/auth/LoginForm'
 import CreateRetreatForm from '../components/auth/CreateRetreatForm'
 import JoinRetreatForm from '../components/auth/JoinRetreatForm'
@@ -70,6 +70,7 @@ export default function LandingPage() {
 
 function MyRetreats() {
   const { data: retreats = [], isLoading } = useMyRetreats()
+  const deleteRetreat = useDeleteRetreat()
 
   if (isLoading) {
     return (
@@ -82,6 +83,14 @@ function MyRetreats() {
   if (retreats.length === 0) return null
 
   const fmt = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+
+  const handleDelete = (e: React.MouseEvent, retreat: typeof retreats[0]) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (confirm(`Delete "${retreat.name}"? This will permanently remove all meals, attendance, and shopping items.`)) {
+      deleteRetreat.mutate({ id: retreat.id })
+    }
+  }
 
   return (
     <div className="mb-8">
@@ -103,11 +112,23 @@ function MyRetreats() {
               }`}>
                 {r.role}
               </span>
+              {r.role === 'organiser' && (
+                <button
+                  onClick={(e) => handleDelete(e, r)}
+                  className="flex h-8 w-8 items-center justify-center rounded-lg text-lg text-stone-300 hover:bg-red-50 hover:text-red-500"
+                  aria-label={`Delete ${r.name}`}
+                >
+                  &times;
+                </button>
+              )}
               <span className="text-stone-300">→</span>
             </div>
           </Link>
         ))}
       </div>
+      {deleteRetreat.isError && (
+        <p className="mt-2 text-sm text-red-600">{deleteRetreat.error.message}</p>
+      )}
     </div>
   )
 }

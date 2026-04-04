@@ -226,6 +226,22 @@ export function useCreateRetreat() {
   })
 }
 
+export function useDeleteRetreat() {
+  const qc = useQueryClient()
+  return useMutation<void, Error, { id: string }>({
+    mutationFn: async ({ id }) => {
+      const { error } = await supabase
+        .from('retreats')
+        .delete()
+        .eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-retreats'] })
+    },
+  })
+}
+
 export function useJoinRetreat() {
   const qc = useQueryClient()
   return useMutation<{ retreat_id: string }, Error, { join_code: string }>({
