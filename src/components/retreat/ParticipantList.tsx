@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useRetreatMembers, useAddMember, useUpdateMember } from '../../lib/queries'
+import { useRetreatMembers, useAddMember, useRemoveMember, useUpdateMember } from '../../lib/queries'
 import { useAuth } from '../layout/AuthGuard'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
@@ -12,6 +12,7 @@ export default function ParticipantList({ retreatId }: ParticipantListProps) {
   const { user } = useAuth()
   const { data: members = [], isLoading } = useRetreatMembers(retreatId)
   const addMember = useAddMember()
+  const removeMember = useRemoveMember()
   const updateMember = useUpdateMember()
 
   const [newName, setNewName] = useState('')
@@ -136,6 +137,22 @@ export default function ParticipantList({ retreatId }: ParticipantListProps) {
                   </div>
                 )}
               </div>
+              {/* Remove button: organiser can remove others, anyone can leave */}
+              {(isOrganiser && !isMe) || (isMe && member.role !== 'organiser') ? (
+                <button
+                  onClick={() => {
+                    const msg = isMe
+                      ? 'Leave this retreat? You can rejoin with the code.'
+                      : `Remove ${member.display_name} from the retreat?`
+                    if (confirm(msg)) {
+                      removeMember.mutate({ id: member.id, retreat_id: retreatId })
+                    }
+                  }}
+                  className="ml-2 flex-shrink-0 rounded px-2 py-1 text-xs text-red-500 hover:bg-red-50 hover:text-red-700"
+                >
+                  {isMe ? 'Leave' : 'Remove'}
+                </button>
+              ) : null}
             </div>
           )
         })}

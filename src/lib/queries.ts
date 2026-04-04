@@ -249,13 +249,12 @@ export function useJoinRetreat() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) throw new Error('Not authenticated')
 
-      // Find retreat by join code
-      const { data: retreat, error: findError } = await supabase
-        .from('retreats')
-        .select('id')
-        .eq('join_code', join_code)
-        .single()
-      if (findError) throw new Error('Invalid join code')
+      // Find retreat by join code (uses security-definer function to bypass RLS)
+      const { data: retreatId, error: findError } = await supabase
+        .rpc('lookup_retreat_by_join_code', { p_join_code: join_code })
+      if (findError || !retreatId) throw new Error('Invalid join code')
+
+      const retreat = { id: retreatId as string }
 
       // Check if a member row already exists for this email (pre-added by organiser)
       const userEmail = user.email || ''
@@ -490,6 +489,22 @@ export function useAddMember() {
         .single()
       if (error) throw error
       return data
+    },
+    onSuccess: (_, { retreat_id }) => {
+      qc.invalidateQueries({ queryKey: ['retreat-members', retreat_id] })
+    },
+  })
+}
+
+export function useRemoveMember() {
+  const qc = useQueryClient()
+  return useMutation<void, Error, { id: string; retreat_id: string }>({
+    mutationFn: async ({ id }) => {
+      const { error } = await supabase
+        .from('retreat_members')
+        .delete()
+        .eq('id', id)
+      if (error) throw error
     },
     onSuccess: (_, { retreat_id }) => {
       qc.invalidateQueries({ queryKey: ['retreat-members', retreat_id] })
