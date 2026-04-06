@@ -3,6 +3,7 @@ import { useRetreatMembers, useAddMember, useRemoveMember, useUpdateMember } fro
 import { useAuth } from '../layout/AuthGuard'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
+import Avatar from '../ui/Avatar'
 
 type ParticipantListProps = {
   retreatId: string
@@ -62,7 +63,9 @@ export default function ParticipantList({ retreatId }: ParticipantListProps) {
               key={member.id}
               className="flex items-start justify-between rounded-lg border border-stone-200 bg-white p-4"
             >
-              <div className="flex-1">
+              <div className="flex flex-1 items-start gap-3">
+                <Avatar name={member.display_name} size="md" />
+                <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-stone-800">{member.display_name}</span>
                   <span
@@ -136,6 +139,7 @@ export default function ParticipantList({ retreatId }: ParticipantListProps) {
                     )}
                   </div>
                 )}
+              </div>
               </div>
               {/* Remove button: organiser can remove others, anyone can leave */}
               {(isOrganiser && !isMe) || (isMe && member.role !== 'organiser') ? (

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useMealAssignments } from '../../lib/queries'
 import type { Meal, RetreatMember } from '../../types'
 import MealDetail from './MealDetail'
+import Avatar from '../ui/Avatar'
 
 type MealCardProps = {
   meal: Meal
@@ -81,12 +82,23 @@ export default function MealCard({ meal, retreatId, members, attendanceCount, pr
           </p>
         )}
 
-        <div className="flex items-center gap-3 text-xs text-stone-500">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500">
           <span>{attendanceCount} attending</span>
-          {leadMember && <span>Lead: {leadMember.display_name}</span>}
+          {leadMember && (
+            <span className="flex items-center gap-1.5">
+              <span className="text-stone-400">Lead:</span>
+              <Avatar name={leadMember.display_name} size="xs" />
+              <span>{leadMember.display_name}</span>
+            </span>
+          )}
           {helperMembers.length > 0 && (
-            <span>
-              Helpers: {helperMembers.map((m) => m!.display_name).join(', ')}
+            <span className="flex items-center gap-1.5">
+              <span className="text-stone-400">Helpers:</span>
+              <span className="flex -space-x-1">
+                {helperMembers.map((m) => (
+                  <Avatar key={m!.id} name={m!.display_name} size="xs" />
+                ))}
+              </span>
             </span>
           )}
         </div>

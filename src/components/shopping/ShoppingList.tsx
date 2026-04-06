@@ -9,7 +9,12 @@ import {
   useRemoveShoppingItem,
 } from '../../lib/queries'
 import { useAuth } from '../layout/AuthGuard'
-import { generateShoppingList, mergeQuantities } from '../../lib/shopping-aggregator'
+import {
+  generateShoppingList,
+  generateShoppingListByMeal,
+  mergeQuantities,
+  EXCLUDED_MARKER,
+} from '../../lib/shopping-aggregator'
 import { SNACK_PREFILLS } from '../../lib/prefills'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
@@ -38,6 +43,7 @@ export default function ShoppingList({ retreatId }: ShoppingListProps) {
   const addItem = useAddShoppingItem()
   const removeItem = useRemoveShoppingItem()
 
+  const [viewMode, setViewMode] = useState<'category' | 'meal'>('category')
   const [showAddModal, setShowAddModal] = useState(false)
   const [showAiModal, setShowAiModal] = useState(false)
   const [newName, setNewName] = useState('')
@@ -51,6 +57,7 @@ export default function ShoppingList({ retreatId }: ShoppingListProps) {
   const allAllergies = [...new Set(members.map((m) => m.allergies).filter(Boolean))]
 
   const aggregated = generateShoppingList(days, meals, attendance, manualItems)
+  const byMealGroups = generateShoppingListByMeal(days, meals, attendance, manualItems)
 
   const grouped = aggregated.reduce<Record<string, typeof aggregated>>((acc, item) => {
     const cat = item.category || 'misc'
@@ -93,6 +100,35 @@ export default function ShoppingList({ retreatId }: ShoppingListProps) {
     for (const id of manualIds) {
       removeItem.mutate({ id, retreat_id: retreatId })
     }
+  }
+
+  // Existing exclusion markers, so we can undo an exclusion too
+  const exclusionByName = new Map(
+    manualItems
+      .filter((i) => i.is_prefill && i.quantity === EXCLUDED_MARKER)
+      .map((i) => [i.name.toLowerCase(), i])
+  )
+
+  const handleExcludePrefill = (name: string, category: string) => {
+    addItem.mutate({
+      retreat_id: retreatId,
+      name,
+      quantity: EXCLUDED_MARKER,
+      category,
+      meal_id: null,
+      added_by_member_id: currentMember?.id || null,
+      is_prefill: true,
+    })
+  }
+
+  const handleRemoveRow = (item: (typeof aggregated)[number]) => {
+    // Manual sources (user-added items): delete them
+    if (item.manualIds.length > 0) {
+      handleRemoveManualSources(item.manualIds)
+      return
+    }
+    // Pure prefill: add an exclusion marker so the aggregator skips it next time
+    handleExcludePrefill(item.name, item.category)
   }
 
   const buildAiPrompt = () => {
@@ -162,19 +198,98 @@ When done, tell me the total number of items added and list any that were skippe
       )}
 
       {/* Top action bar */}
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={() => setShowAddModal(true)}>
-          + Add item
-        </Button>
-        <Button variant="secondary" onClick={() => setShowAiModal(true)} disabled={aggregated.length === 0}>
-          Order via AI
-        </Button>
-        <Button variant="secondary" onClick={handleCopy} disabled={aggregated.length === 0}>
-          {copied ? 'Copied!' : 'Copy list'}
-        </Button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => setShowAddModal(true)}>
+            + Add item
+          </Button>
+          <Button variant="secondary" onClick={() => setShowAiModal(true)} disabled={aggregated.length === 0}>
+            Order via AI
+          </Button>
+          <Button variant="secondary" onClick={handleCopy} disabled={aggregated.length === 0}>
+            {copied ? 'Copied!' : 'Copy list'}
+          </Button>
+        </div>
+
+        {/* View toggle */}
+        <div
+          role="tablist"
+          aria-label="Shopping list view"
+          className="inline-flex rounded-lg border border-stone-200 bg-white p-0.5"
+        >
+          <button
+            role="tab"
+            aria-selected={viewMode === 'category'}
+            onClick={() => setViewMode('category')}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              viewMode === 'category'
+                ? 'bg-green-700 text-white'
+                : 'text-stone-600 hover:text-stone-800'
+            }`}
+          >
+            By category
+          </button>
+          <button
+            role="tab"
+            aria-selected={viewMode === 'meal'}
+            onClick={() => setViewMode('meal')}
+            className={`rounded-md px-3 py-1 text-xs font-medium transition-colors ${
+              viewMode === 'meal'
+                ? 'bg-green-700 text-white'
+                : 'text-stone-600 hover:text-stone-800'
+            }`}
+          >
+            By meal
+          </button>
+        </div>
       </div>
 
-      {/* Aggregated list */}
+      {/* By-meal view */}
+      {viewMode === 'meal' && (
+        <div className="space-y-6">
+          {byMealGroups.map((group) => (
+            <div key={group.mealId ?? 'retreat-wide'}>
+              <h3 className="mb-2 text-sm font-semibold text-stone-700">{group.label}</h3>
+              <div className="space-y-1">
+                {group.items.map((item, i) => (
+                  <div
+                    key={`${item.name}-${i}`}
+                    className="flex items-center justify-between rounded-lg bg-white px-4 py-2 text-sm border border-stone-100"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-stone-800">{item.name}</span>
+                      <span className="text-xs text-stone-400">{item.category}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-stone-500">{mergeQuantities(item.quantities)}</span>
+                      <button
+                        onClick={() => handleRemoveRow(item)}
+                        className="rounded px-1.5 py-0.5 text-xs text-red-500 hover:bg-red-50 hover:text-red-700"
+                        aria-label={`Remove ${item.name}`}
+                        title={
+                          item.manualIds.length > 0
+                            ? 'Remove user-added item'
+                            : 'Exclude from shopping list (applies retreat-wide)'
+                        }
+                      >
+                        &times;
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+          {byMealGroups.length === 0 && (
+            <p className="py-8 text-center text-stone-400">
+              No items yet. Make sure attendance is filled out for meals, or add items manually.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Aggregated (by category) list */}
+      {viewMode === 'category' && (
       <div className="space-y-6">
         {Object.entries(grouped)
           .sort(([a], [b]) => a.localeCompare(b))
@@ -192,16 +307,18 @@ When done, tell me the total number of items added and list any that were skippe
                     <span className="text-stone-800">{item.name}</span>
                     <div className="flex items-center gap-3">
                       <span className="text-stone-500">{mergeQuantities(item.quantities)}</span>
-                      {item.manualIds.length > 0 && (
-                        <button
-                          onClick={() => handleRemoveManualSources(item.manualIds)}
-                          className="rounded px-1.5 py-0.5 text-xs text-red-500 hover:bg-red-50 hover:text-red-700"
-                          aria-label={`Remove ${item.name}`}
-                          title="Remove (only removes user-added portion)"
-                        >
-                          &times;
-                        </button>
-                      )}
+                      <button
+                        onClick={() => handleRemoveRow(item)}
+                        className="rounded px-1.5 py-0.5 text-xs text-red-500 hover:bg-red-50 hover:text-red-700"
+                        aria-label={`Remove ${item.name}`}
+                        title={
+                          item.manualIds.length > 0
+                            ? 'Remove user-added item'
+                            : 'Exclude from shopping list (applies retreat-wide)'
+                        }
+                      >
+                        &times;
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -214,7 +331,34 @@ When done, tell me the total number of items added and list any that were skippe
             No items yet. Make sure attendance is filled out for meals, or add items manually.
           </p>
         )}
+
       </div>
+      )}
+
+      {/* Excluded items — shown under both views */}
+      {exclusionByName.size > 0 && (
+        <details className="pt-2">
+          <summary className="cursor-pointer text-xs text-stone-400 hover:text-stone-600">
+            {exclusionByName.size} excluded item{exclusionByName.size === 1 ? '' : 's'}
+          </summary>
+          <div className="mt-2 space-y-1">
+            {[...exclusionByName.values()].map((ex) => (
+              <div
+                key={ex.id}
+                className="flex items-center justify-between rounded-lg border border-dashed border-stone-200 bg-stone-50 px-4 py-1.5 text-sm"
+              >
+                <span className="text-stone-500 line-through">{ex.name}</span>
+                <button
+                  onClick={() => removeItem.mutate({ id: ex.id, retreat_id: retreatId })}
+                  className="rounded px-1.5 py-0.5 text-xs text-green-600 hover:bg-green-50 hover:text-green-700"
+                >
+                  Re-include
+                </button>
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
 
       {/* Add item modal */}
       {showAddModal && (

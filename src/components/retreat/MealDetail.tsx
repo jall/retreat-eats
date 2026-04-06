@@ -18,6 +18,7 @@ import { generateRecipe, type GeneratedRecipe } from '../../lib/recipe-generator
 import type { Meal, RetreatMember, MealStyle } from '../../types'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
+import Avatar from '../ui/Avatar'
 
 type MealDetailProps = {
   meal: Meal
@@ -534,26 +535,34 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
           {/* Assign lead */}
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-stone-700">Lead cook</label>
-            <select
-              value={lead?.member_id || ''}
-              onChange={(e) => handleAssignLead(e.target.value)}
-              className="rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900
-                focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
-            >
-              <option value="">None</option>
-              {[...members].sort((a, b) => a.display_name.localeCompare(b.display_name)).map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.display_name}
-                </option>
-              ))}
-            </select>
+            <div className="flex items-center gap-2">
+              {lead && (
+                <Avatar
+                  name={members.find((m) => m.id === lead.member_id)?.display_name || '?'}
+                  size="md"
+                />
+              )}
+              <select
+                value={lead?.member_id || ''}
+                onChange={(e) => handleAssignLead(e.target.value)}
+                className="flex-1 rounded-lg border border-stone-300 bg-white px-3 py-2 text-sm text-stone-900
+                  focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500/20"
+              >
+                <option value="">None</option>
+                {[...members].sort((a, b) => a.display_name.localeCompare(b.display_name)).map((m) => (
+                  <option key={m.id} value={m.id}>
+                    {m.display_name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Assign helpers */}
           <div className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-stone-700">Helpers</span>
             <div className="space-y-1">
-              {members.map((m) => (
+              {[...members].sort((a, b) => a.display_name.localeCompare(b.display_name)).map((m) => (
                 <label key={m.id} className="flex items-center gap-2 text-sm text-stone-700">
                   <input
                     type="checkbox"
@@ -561,6 +570,7 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
                     onChange={() => handleToggleHelper(m.id)}
                     className="rounded border-stone-300 text-green-700 focus:ring-green-500"
                   />
+                  <Avatar name={m.display_name} size="sm" />
                   {m.display_name}
                 </label>
               ))}
