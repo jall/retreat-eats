@@ -10,8 +10,10 @@ import {
 } from '../../lib/queries'
 import { useAuth } from '../layout/AuthGuard'
 import { generateShoppingList, mergeQuantities } from '../../lib/shopping-aggregator'
+import { SNACK_PREFILLS } from '../../lib/prefills'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
+import Modal from '../ui/Modal'
 
 const SUPERMARKETS = [
   { key: 'tesco', label: 'Tesco', url: 'tesco.com/groceries' },
@@ -36,21 +38,20 @@ export default function ShoppingList({ retreatId }: ShoppingListProps) {
   const addItem = useAddShoppingItem()
   const removeItem = useRemoveShoppingItem()
 
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [showAiModal, setShowAiModal] = useState(false)
   const [newName, setNewName] = useState('')
   const [newQty, setNewQty] = useState('')
   const [copied, setCopied] = useState(false)
-  const [showAiOrder, setShowAiOrder] = useState(false)
   const [selectedSupermarket, setSelectedSupermarket] = useState<string>(SUPERMARKETS[0].key)
   const [aiPromptCopied, setAiPromptCopied] = useState(false)
 
   const currentMember = members.find((m) => m.user_id === user.id)
 
-  // Allergies banner
   const allAllergies = [...new Set(members.map((m) => m.allergies).filter(Boolean))]
 
   const aggregated = generateShoppingList(days, meals, attendance, manualItems)
 
-  // Group by category
   const grouped = aggregated.reduce<Record<string, typeof aggregated>>((acc, item) => {
     const cat = item.category || 'misc'
     if (!acc[cat]) acc[cat] = []
@@ -58,7 +59,11 @@ export default function ShoppingList({ retreatId }: ShoppingListProps) {
     return acc
   }, {})
 
-  const handleAddItem = (e: React.FormEvent) => {
+  // Snack suggestions = SNACK_PREFILLS not yet manually added
+  const addedNames = new Set(manualItems.map((i) => i.name.toLowerCase()))
+  const snackSuggestions = SNACK_PREFILLS.filter((p) => !addedNames.has(p.name.toLowerCase()))
+
+  const handleAddCustom = (e: React.FormEvent) => {
     e.preventDefault()
     if (!newName.trim()) return
     addItem.mutate(
@@ -66,10 +71,28 @@ export default function ShoppingList({ retreatId }: ShoppingListProps) {
         retreat_id: retreatId,
         name: newName.trim(),
         quantity: newQty.trim() || undefined,
+        category: 'misc',
+        meal_id: null,
         added_by_member_id: currentMember?.id || null,
       },
       { onSuccess: () => { setNewName(''); setNewQty('') } }
     )
+  }
+
+  const handleAddSnackSuggestion = (name: string, category: string) => {
+    addItem.mutate({
+      retreat_id: retreatId,
+      name,
+      category,
+      meal_id: null,
+      added_by_member_id: currentMember?.id || null,
+    })
+  }
+
+  const handleRemoveManualSources = (manualIds: string[]) => {
+    for (const id of manualIds) {
+      removeItem.mutate({ id, retreat_id: retreatId })
+    }
   }
 
   const buildAiPrompt = () => {
@@ -138,16 +161,20 @@ When done, tell me the total number of items added and list any that were skippe
         </div>
       )}
 
-      {/* Copy button */}
-      {aggregated.length > 0 && (
-        <div className="flex items-center gap-3">
-          <Button variant="secondary" onClick={handleCopy}>
-            {copied ? 'Copied!' : 'Copy to clipboard'}
-          </Button>
-        </div>
-      )}
+      {/* Top action bar */}
+      <div className="flex flex-wrap gap-2">
+        <Button onClick={() => setShowAddModal(true)}>
+          + Add item
+        </Button>
+        <Button variant="secondary" onClick={() => setShowAiModal(true)} disabled={aggregated.length === 0}>
+          Order via AI
+        </Button>
+        <Button variant="secondary" onClick={handleCopy} disabled={aggregated.length === 0}>
+          {copied ? 'Copied!' : 'Copy list'}
+        </Button>
+      </div>
 
-      {/* Shopping list */}
+      {/* Aggregated list */}
       <div className="space-y-6">
         {Object.entries(grouped)
           .sort(([a], [b]) => a.localeCompare(b))
@@ -163,7 +190,19 @@ When done, tell me the total number of items added and list any that were skippe
                     className="flex items-center justify-between rounded-lg bg-white px-4 py-2 text-sm border border-stone-100"
                   >
                     <span className="text-stone-800">{item.name}</span>
-                    <span className="text-stone-500">{mergeQuantities(item.quantities)}</span>
+                    <div className="flex items-center gap-3">
+                      <span className="text-stone-500">{mergeQuantities(item.quantities)}</span>
+                      {item.manualIds.length > 0 && (
+                        <button
+                          onClick={() => handleRemoveManualSources(item.manualIds)}
+                          className="rounded px-1.5 py-0.5 text-xs text-red-500 hover:bg-red-50 hover:text-red-700"
+                          aria-label={`Remove ${item.name}`}
+                          title="Remove (only removes user-added portion)"
+                        >
+                          &times;
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -172,134 +211,116 @@ When done, tell me the total number of items added and list any that were skippe
 
         {aggregated.length === 0 && (
           <p className="py-8 text-center text-stone-400">
-            No items yet. Make sure attendance is filled out for meals.
+            No items yet. Make sure attendance is filled out for meals, or add items manually.
           </p>
         )}
       </div>
 
-      {/* Manual items from DB */}
-      {manualItems.length > 0 && (
-        <div>
-          <h3 className="mb-2 text-sm font-semibold text-stone-700">Manually added items</h3>
-          <div className="space-y-1">
-            {manualItems.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-center justify-between rounded-lg bg-white px-4 py-2 text-sm border border-stone-100"
-              >
-                <div>
-                  <span className="text-stone-800">{item.name}</span>
-                  {item.quantity && (
-                    <span className="ml-2 text-stone-500">({item.quantity})</span>
-                  )}
-                </div>
-                <button
-                  onClick={() => removeItem.mutate({ id: item.id, retreat_id: retreatId })}
-                  className="rounded px-2 py-1 text-xs text-red-500 hover:bg-red-50 hover:text-red-700"
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Add item modal */}
+      {showAddModal && (
+        <Modal title="Add to shopping list" onClose={() => setShowAddModal(false)} maxWidthClass="max-w-md">
+          <div className="space-y-5">
+            <form onSubmit={handleAddCustom} className="space-y-3">
+              <Input
+                label="Item"
+                placeholder="e.g. Popcorn, lighter fluid, oat milk"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                required
+                autoFocus
+              />
+              <Input
+                label="Quantity (optional)"
+                placeholder="e.g. 2 packs"
+                value={newQty}
+                onChange={(e) => setNewQty(e.target.value)}
+              />
+              <Button type="submit" disabled={addItem.isPending || !newName.trim()}>
+                {addItem.isPending ? 'Adding…' : 'Add item'}
+              </Button>
+              {addItem.isError && (
+                <p className="text-sm text-red-600">{addItem.error.message}</p>
+              )}
+            </form>
 
-      {/* AI ordering */}
-      {aggregated.length > 0 && (
-        <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-sm font-semibold text-indigo-900">Order via AI</h3>
-              <p className="text-xs text-indigo-600">
-                Copy a prompt for Claude Desktop (with computer use) to add items to your supermarket basket
-              </p>
-            </div>
-            <button
-              onClick={() => setShowAiOrder(!showAiOrder)}
-              className="rounded-lg px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
-            >
-              {showAiOrder ? 'Hide' : 'Set up'}
-            </button>
-          </div>
-
-          {showAiOrder && (
-            <div className="mt-4 space-y-3">
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-indigo-900">Supermarket</label>
+            {snackSuggestions.length > 0 && (
+              <div className="border-t border-stone-200 pt-4">
+                <p className="mb-2 text-sm font-medium text-stone-700">Quick add — snacks & extras</p>
                 <div className="flex flex-wrap gap-2">
-                  {SUPERMARKETS.map((s) => (
+                  {snackSuggestions.map((s) => (
                     <button
-                      key={s.key}
-                      onClick={() => setSelectedSupermarket(s.key)}
-                      className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
-                        selectedSupermarket === s.key
-                          ? 'bg-indigo-700 text-white'
-                          : 'bg-white text-indigo-700 border border-indigo-200 hover:border-indigo-400'
-                      }`}
+                      key={s.name}
+                      type="button"
+                      onClick={() => handleAddSnackSuggestion(s.name, s.category)}
+                      className="rounded-full border border-stone-200 bg-white px-3 py-1.5 text-sm text-stone-700 hover:border-green-300 hover:bg-green-50 transition-colors"
                     >
-                      {s.label}
+                      + {s.name}
                     </button>
                   ))}
                 </div>
               </div>
-
-              <div className="rounded-lg bg-white border border-indigo-200 p-3">
-                <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap text-xs text-stone-700 font-mono">
-                  {buildAiPrompt()}
-                </pre>
-              </div>
-
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                <Button onClick={handleCopyAiPrompt}>
-                  {aiPromptCopied ? 'Copied!' : 'Copy prompt'}
-                </Button>
-                <p className="text-xs text-indigo-600">
-                  Paste into Claude Desktop with computer use enabled. Make sure you're logged into {SUPERMARKETS.find((s) => s.key === selectedSupermarket)?.label} first.
-                </p>
-              </div>
-
-              <details className="text-xs text-indigo-500">
-                <summary className="cursor-pointer hover:text-indigo-700">How does this work?</summary>
-                <div className="mt-2 space-y-1.5 text-indigo-600">
-                  <p>1. Open <strong>Claude Desktop</strong> (Mac or Windows) and enable <strong>computer use</strong> in Settings</p>
-                  <p>2. Log into your supermarket website in your browser</p>
-                  <p>3. Paste the prompt above into Claude Desktop</p>
-                  <p>4. Claude will take control of your screen, search for each item, and add them to your basket</p>
-                  <p>5. Review the basket and checkout yourself — Claude won't enter payment details</p>
-                </div>
-              </details>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        </Modal>
       )}
 
-      {/* Add manual item */}
-      <div className="rounded-lg border border-dashed border-stone-300 bg-stone-50 p-4">
-        <h3 className="mb-3 text-sm font-semibold text-stone-700">Add an item</h3>
-        <form onSubmit={handleAddItem} className="flex flex-col gap-2 sm:flex-row">
-          <Input
-            placeholder="Item name"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            required
-          />
-          <div className="flex gap-2">
-            <Input
-              placeholder="Qty"
-              value={newQty}
-              onChange={(e) => setNewQty(e.target.value)}
-              className="w-24"
-            />
-            <Button type="submit" size="sm" disabled={addItem.isPending}>
-              Add
-            </Button>
+      {/* AI ordering modal */}
+      {showAiModal && (
+        <Modal title="Order via AI" onClose={() => setShowAiModal(false)} maxWidthClass="max-w-lg">
+          <div className="space-y-4">
+            <p className="text-sm text-stone-600">
+              Copy a prompt for Claude Desktop (with computer use enabled) to add the whole shopping list to your supermarket basket.
+            </p>
+
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-stone-700">Supermarket</label>
+              <div className="flex flex-wrap gap-2">
+                {SUPERMARKETS.map((s) => (
+                  <button
+                    key={s.key}
+                    type="button"
+                    onClick={() => setSelectedSupermarket(s.key)}
+                    className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+                      selectedSupermarket === s.key
+                        ? 'bg-indigo-700 text-white'
+                        : 'bg-white text-indigo-700 border border-indigo-200 hover:border-indigo-400'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-lg bg-stone-50 border border-stone-200 p-3">
+              <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap text-xs text-stone-700 font-mono">
+                {buildAiPrompt()}
+              </pre>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <Button onClick={handleCopyAiPrompt}>
+                {aiPromptCopied ? 'Copied!' : 'Copy prompt'}
+              </Button>
+              <p className="text-xs text-stone-500">
+                Make sure you're logged into{' '}
+                {SUPERMARKETS.find((s) => s.key === selectedSupermarket)?.label} first.
+              </p>
+            </div>
+
+            <details className="text-xs text-stone-500">
+              <summary className="cursor-pointer hover:text-stone-700">How does this work?</summary>
+              <div className="mt-2 space-y-1.5">
+                <p>1. Open <strong>Claude Desktop</strong> (Mac or Windows) and enable <strong>computer use</strong> in Settings</p>
+                <p>2. Log into your supermarket website in your browser</p>
+                <p>3. Paste the prompt above into Claude Desktop</p>
+                <p>4. Claude will take control of your screen, search for each item, and add them to your basket</p>
+                <p>5. Review the basket and checkout yourself — Claude won't enter payment details</p>
+              </div>
+            </details>
           </div>
-        </form>
-        {addItem.isError && (
-          <p className="mt-2 text-sm text-red-600">{addItem.error.message}</p>
-        )}
-      </div>
+        </Modal>
+      )}
     </div>
   )
 }

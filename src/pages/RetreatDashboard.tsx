@@ -7,9 +7,8 @@ import DayGrid from '../components/retreat/DayGrid'
 import AttendanceMatrix from '../components/retreat/AttendanceMatrix'
 import ParticipantList from '../components/retreat/ParticipantList'
 import ShoppingList from '../components/shopping/ShoppingList'
-import SnackRequests from '../components/snacks/SnackRequests'
 
-type Tab = 'schedule' | 'people' | 'shopping' | 'snacks'
+type Tab = 'schedule' | 'people' | 'shopping'
 
 export default function RetreatDashboard() {
   const { id } = useParams<{ id: string }>()
@@ -43,7 +42,6 @@ export default function RetreatDashboard() {
     { key: 'schedule', label: 'Schedule' },
     { key: 'people', label: 'People' },
     { key: 'shopping', label: 'Shopping List' },
-    { key: 'snacks', label: 'Snacks' },
   ]
 
   return (
@@ -133,7 +131,6 @@ export default function RetreatDashboard() {
         </div>
       )}
       {activeTab === 'shopping' && <ShoppingList retreatId={id!} />}
-      {activeTab === 'snacks' && <SnackRequests retreatId={id!} />}
     </AppShell>
   )
 }

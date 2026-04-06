@@ -72,7 +72,7 @@ describe('generateShoppingList', () => {
     expect(dinnerItems).toEqual([])
   })
 
-  it('includes manual shopping items', () => {
+  it('includes manual shopping items with their source ids', () => {
     const days = [makeDay('d1', '2026-04-03')]
     const meals = [makeMeal('m1', 'd1', 'Dinner', 'assigned_recipe')]
     const manualItems = [
@@ -82,6 +82,16 @@ describe('generateShoppingList', () => {
     const tofu = result.find((i) => i.name === 'Tofu')
     expect(tofu).toBeDefined()
     expect(tofu!.is_prefill).toBe(false)
+    expect(tofu!.manualIds).toEqual(['si-Tofu'])
+  })
+
+  it('leaves manualIds empty for prefill-only rows', () => {
+    const days = [makeDay('d1', '2026-04-03')]
+    const meals = [makeMeal('m1', 'd1', 'Breakfast')]
+    const attendance = [makeAttendance('m1', 'p1')]
+    const result = generateShoppingList(days, meals, attendance, [])
+    const oats = result.find((i) => i.name === 'Porridge oats')
+    expect(oats!.manualIds).toEqual([])
   })
 
   it('aggregates same-name items across meals', () => {

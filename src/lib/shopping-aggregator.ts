@@ -6,6 +6,10 @@ export type AggregatedItem = {
   category: string
   quantities: string[]
   is_prefill: boolean
+  // IDs of underlying ShoppingItem rows (manual additions / recipe ingredients
+  // / snack requests). Populated when this aggregated row has a removable
+  // user-added source. Prefill-only rows leave this empty.
+  manualIds: string[]
 }
 
 export const EXCLUDED_MARKER = 'EXCLUDED'
@@ -30,13 +34,26 @@ export function generateShoppingList(
     (i) => !i.is_prefill || (i.is_prefill && i.quantity !== EXCLUDED_MARKER)
   )
 
-  function addItem(name: string, category: string, quantity: string, is_prefill: boolean) {
+  function addItem(
+    name: string,
+    category: string,
+    quantity: string,
+    is_prefill: boolean,
+    manualId?: string
+  ) {
     const key = name.toLowerCase()
     const existing = aggregation.get(key)
     if (existing) {
       existing.quantities.push(quantity)
+      if (manualId) existing.manualIds.push(manualId)
     } else {
-      aggregation.set(key, { name, category, quantities: [quantity], is_prefill })
+      aggregation.set(key, {
+        name,
+        category,
+        quantities: [quantity],
+        is_prefill,
+        manualIds: manualId ? [manualId] : [],
+      })
     }
   }
 
@@ -82,7 +99,7 @@ export function generateShoppingList(
 
   // Manual items (from assigned_recipe meals, snack requests, and custom generic additions)
   for (const item of manualItems) {
-    addItem(item.name, item.category, item.quantity || '', false)
+    addItem(item.name, item.category, item.quantity || '', false, item.id)
   }
 
   // Sort by category then name
