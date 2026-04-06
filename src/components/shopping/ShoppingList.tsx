@@ -36,7 +36,6 @@ export default function ShoppingList({ retreatId }: ShoppingListProps) {
   const addItem = useAddShoppingItem()
   const removeItem = useRemoveShoppingItem()
 
-  const [showList, setShowList] = useState(false)
   const [newName, setNewName] = useState('')
   const [newQty, setNewQty] = useState('')
   const [copied, setCopied] = useState(false)
@@ -49,9 +48,7 @@ export default function ShoppingList({ retreatId }: ShoppingListProps) {
   // Allergies banner
   const allAllergies = [...new Set(members.map((m) => m.allergies).filter(Boolean))]
 
-  const aggregated = showList
-    ? generateShoppingList(days, meals, attendance, manualItems)
-    : []
+  const aggregated = generateShoppingList(days, meals, attendance, manualItems)
 
   // Group by category
   const grouped = aggregated.reduce<Record<string, typeof aggregated>>((acc, item) => {
@@ -141,49 +138,44 @@ When done, tell me the total number of items added and list any that were skippe
         </div>
       )}
 
-      {/* Generate button */}
-      <div className="flex items-center gap-3">
-        <Button onClick={() => setShowList(true)}>
-          {showList ? 'Regenerate list' : 'Generate shopping list'}
-        </Button>
-        {showList && (
+      {/* Copy button */}
+      {aggregated.length > 0 && (
+        <div className="flex items-center gap-3">
           <Button variant="secondary" onClick={handleCopy}>
             {copied ? 'Copied!' : 'Copy to clipboard'}
           </Button>
-        )}
-      </div>
-
-      {/* Shopping list */}
-      {showList && (
-        <div className="space-y-6">
-          {Object.entries(grouped)
-            .sort(([a], [b]) => a.localeCompare(b))
-            .map(([category, items]) => (
-              <div key={category}>
-                <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-500">
-                  {category}
-                </h3>
-                <div className="space-y-1">
-                  {items.map((item, i) => (
-                    <div
-                      key={`${item.name}-${i}`}
-                      className="flex items-center justify-between rounded-lg bg-white px-4 py-2 text-sm border border-stone-100"
-                    >
-                      <span className="text-stone-800">{item.name}</span>
-                      <span className="text-stone-500">{mergeQuantities(item.quantities)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-
-          {aggregated.length === 0 && (
-            <p className="py-8 text-center text-stone-400">
-              No items yet. Make sure attendance is filled out for meals.
-            </p>
-          )}
         </div>
       )}
+
+      {/* Shopping list */}
+      <div className="space-y-6">
+        {Object.entries(grouped)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([category, items]) => (
+            <div key={category}>
+              <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-stone-500">
+                {category}
+              </h3>
+              <div className="space-y-1">
+                {items.map((item, i) => (
+                  <div
+                    key={`${item.name}-${i}`}
+                    className="flex items-center justify-between rounded-lg bg-white px-4 py-2 text-sm border border-stone-100"
+                  >
+                    <span className="text-stone-800">{item.name}</span>
+                    <span className="text-stone-500">{mergeQuantities(item.quantities)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+
+        {aggregated.length === 0 && (
+          <p className="py-8 text-center text-stone-400">
+            No items yet. Make sure attendance is filled out for meals.
+          </p>
+        )}
+      </div>
 
       {/* Manual items from DB */}
       {manualItems.length > 0 && (
@@ -214,7 +206,7 @@ When done, tell me the total number of items added and list any that were skippe
       )}
 
       {/* AI ordering */}
-      {showList && aggregated.length > 0 && (
+      {aggregated.length > 0 && (
         <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-4">
           <div className="flex items-center justify-between">
             <div>
