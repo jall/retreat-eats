@@ -82,23 +82,25 @@ export default function MealCard({ meal, retreatId, members, attendanceCount, pr
           </p>
         )}
 
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-stone-500">
+        <div className="flex items-center justify-between gap-2 text-xs text-stone-500">
           <span>{attendanceCount} attending</span>
-          {leadMember && (
-            <span className="flex items-center gap-1.5">
-              <span className="text-stone-400">Lead:</span>
-              <Avatar name={leadMember.display_name} size="xs" />
-              <span>{leadMember.display_name}</span>
-            </span>
-          )}
-          {helperMembers.length > 0 && (
-            <span className="flex items-center gap-1.5">
-              <span className="text-stone-400">Helpers:</span>
-              <span className="flex -space-x-1">
-                {helperMembers.map((m) => (
-                  <Avatar key={m!.id} name={m!.display_name} size="xs" />
-                ))}
-              </span>
+          {(leadMember || helperMembers.length > 0) && (
+            <span className="flex items-center gap-1">
+              {leadMember && (
+                <Avatar
+                  name={leadMember.display_name}
+                  src={leadMember.avatar_url}
+                  size="sm"
+                  badge="👨‍🍳"
+                />
+              )}
+              {helperMembers.length > 0 && (
+                <span className="flex -space-x-1.5">
+                  {helperMembers.map((m) => (
+                    <Avatar key={m!.id} name={m!.display_name} src={m!.avatar_url} size="sm" />
+                  ))}
+                </span>
+              )}
             </span>
           )}
         </div>

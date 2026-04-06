@@ -21,6 +21,14 @@ export type RetreatMember = {
   role: Role
   allergies: string
   created_at: string
+  // joined from profiles — null for unlinked members or users without an uploaded avatar
+  avatar_url: string | null
+}
+
+export type Profile = {
+  user_id: string
+  avatar_url: string | null
+  updated_at: string
 }
 
 export type RetreatDay = {

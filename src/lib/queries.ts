@@ -53,7 +53,96 @@ export function useRetreatMembers(retreatId: string) {
         .eq('retreat_id', retreatId)
         .order('created_at')
       if (error) throw error
+
+      // Join avatar_url from profiles (separate table, no FK declared)
+      const userIds = (data || []).map((m) => m.user_id).filter((id): id is string => !!id)
+      let avatarByUserId = new Map<string, string | null>()
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('user_id, avatar_url')
+          .in('user_id', userIds)
+        avatarByUserId = new Map(
+          (profiles || []).map((p) => [p.user_id as string, p.avatar_url as string | null])
+        )
+      }
+
+      return (data || []).map((m) => ({
+        ...m,
+        avatar_url: m.user_id ? avatarByUserId.get(m.user_id) ?? null : null,
+      }))
+    },
+  })
+}
+
+export function useMyProfile() {
+  return useQuery({
+    queryKey: ['my-profile'],
+    queryFn: async () => {
+      const { data: userData } = await supabase.auth.getUser()
+      const userId = userData.user?.id
+      if (!userId) return null
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle()
+      if (error) throw error
       return data
+    },
+  })
+}
+
+export function useUpdateMyAvatar() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const { data: userData } = await supabase.auth.getUser()
+      const userId = userData.user?.id
+      if (!userId) throw new Error('Not signed in')
+
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'png'
+      // Stable filename per user so repeated uploads overwrite the previous one.
+      const path = `${userId}/avatar.${ext}`
+
+      const { error: upErr } = await supabase.storage
+        .from('avatars')
+        .upload(path, file, { upsert: true, contentType: file.type })
+      if (upErr) throw upErr
+
+      const { data: pub } = supabase.storage.from('avatars').getPublicUrl(path)
+      // Cache-bust so the new image shows immediately
+      const publicUrl = `${pub.publicUrl}?t=${Date.now()}`
+
+      const { error: profileErr } = await supabase
+        .from('profiles')
+        .upsert({ user_id: userId, avatar_url: publicUrl, updated_at: new Date().toISOString() })
+      if (profileErr) throw profileErr
+
+      return publicUrl
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-profile'] })
+      qc.invalidateQueries({ queryKey: ['retreat-members'] })
+    },
+  })
+}
+
+export function useRemoveMyAvatar() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      const { data: userData } = await supabase.auth.getUser()
+      const userId = userData.user?.id
+      if (!userId) throw new Error('Not signed in')
+      const { error } = await supabase
+        .from('profiles')
+        .upsert({ user_id: userId, avatar_url: null, updated_at: new Date().toISOString() })
+      if (error) throw error
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-profile'] })
+      qc.invalidateQueries({ queryKey: ['retreat-members'] })
     },
   })
 }

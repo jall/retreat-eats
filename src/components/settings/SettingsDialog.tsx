@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
+import Avatar from '../ui/Avatar'
 import { getAiKey, setAiKey, clearAiKey, type AiProvider } from '../../lib/ai-settings'
+import { useMyProfile, useUpdateMyAvatar, useRemoveMyAvatar } from '../../lib/queries'
+import { supabase } from '../../lib/supabase'
 
 type SettingsDialogProps = {
   onClose: () => void
@@ -9,11 +12,49 @@ type SettingsDialogProps = {
 
 export default function SettingsDialog({ onClose }: SettingsDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const existing = getAiKey()
   const [provider, setProvider] = useState<AiProvider>(existing?.provider ?? 'anthropic')
   const [keyValue, setKeyValue] = useState(existing?.key ?? '')
   const [showKey, setShowKey] = useState(false)
   const [savedFlash, setSavedFlash] = useState(false)
+  const [displayName, setDisplayName] = useState('You')
+  const [uploadError, setUploadError] = useState<string | null>(null)
+
+  const { data: profile } = useMyProfile()
+  const updateAvatar = useUpdateMyAvatar()
+  const removeAvatar = useRemoveMyAvatar()
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      setDisplayName(
+        (data.user?.user_metadata?.display_name as string | undefined) ||
+          data.user?.email?.split('@')[0] ||
+          'You'
+      )
+    })
+  }, [])
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadError(null)
+    if (!file.type.startsWith('image/')) {
+      setUploadError('Please pick an image file.')
+      return
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      setUploadError('Image is larger than 2 MB — please pick something smaller.')
+      return
+    }
+    try {
+      await updateAvatar.mutateAsync(file)
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : 'Upload failed')
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = ''
+    }
+  }
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -63,7 +104,50 @@ export default function SettingsDialog({ onClose }: SettingsDialogProps) {
           </button>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-6">
+          {/* Profile picture */}
+          <div>
+            <h3 className="text-sm font-semibold text-stone-700">Profile picture</h3>
+            <p className="mt-1 text-xs text-stone-500">
+              Shown next to your name across retreats you're a member of.
+            </p>
+            <div className="mt-3 flex items-center gap-4">
+              <Avatar name={displayName} src={profile?.avatar_url ?? null} size="lg" />
+              <div className="flex flex-col gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileChange}
+                  className="hidden"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={updateAvatar.isPending}
+                  >
+                    {updateAvatar.isPending ? 'Uploading…' : profile?.avatar_url ? 'Change' : 'Upload'}
+                  </Button>
+                  {profile?.avatar_url && (
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={() => removeAvatar.mutate()}
+                      disabled={removeAvatar.isPending}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </div>
+                {uploadError && <p className="text-xs text-red-600">{uploadError}</p>}
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-stone-200" />
+
           <div>
             <h3 className="text-sm font-semibold text-stone-700">AI recipe generator</h3>
             <p className="mt-1 text-xs text-stone-500">

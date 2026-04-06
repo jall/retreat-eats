@@ -1,6 +1,8 @@
 type AvatarProps = {
   name: string
+  src?: string | null
   size?: 'xs' | 'sm' | 'md' | 'lg'
+  badge?: string // optional emoji/char shown as a small badge at top-right
   className?: string
 }
 
@@ -27,6 +29,13 @@ const SIZE_CLASSES: Record<NonNullable<AvatarProps['size']>, string> = {
   lg: 'h-12 w-12 text-base',
 }
 
+const BADGE_SIZE_CLASSES: Record<NonNullable<AvatarProps['size']>, string> = {
+  xs: 'h-3 w-3 text-[8px] -top-0.5 -right-0.5',
+  sm: 'h-4 w-4 text-[10px] -top-0.5 -right-0.5',
+  md: 'h-5 w-5 text-xs -top-1 -right-1',
+  lg: 'h-6 w-6 text-sm -top-1 -right-1',
+}
+
 function hashString(s: string): number {
   let h = 0
   for (let i = 0; i < s.length; i++) {
@@ -42,16 +51,32 @@ function getInitials(name: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-export default function Avatar({ name, size = 'sm', className = '' }: AvatarProps) {
+export default function Avatar({ name, src, size = 'sm', badge, className = '' }: AvatarProps) {
   const color = COLORS[hashString(name) % COLORS.length]
   const initials = getInitials(name)
   return (
-    <span
-      className={`inline-flex shrink-0 items-center justify-center rounded-full font-semibold text-white ring-1 ring-white ${color} ${SIZE_CLASSES[size]} ${className}`}
-      title={name}
-      aria-label={name}
-    >
-      {initials}
+    <span className={`relative inline-block shrink-0 ${className}`} title={name} aria-label={name}>
+      {src ? (
+        <img
+          src={src}
+          alt={name}
+          className={`rounded-full object-cover ring-1 ring-white ${SIZE_CLASSES[size]}`}
+        />
+      ) : (
+        <span
+          className={`inline-flex items-center justify-center rounded-full font-semibold text-white ring-1 ring-white ${color} ${SIZE_CLASSES[size]}`}
+        >
+          {initials}
+        </span>
+      )}
+      {badge && (
+        <span
+          aria-hidden="true"
+          className={`absolute inline-flex items-center justify-center rounded-full bg-white ring-1 ring-stone-200 shadow-sm ${BADGE_SIZE_CLASSES[size]}`}
+        >
+          {badge}
+        </span>
+      )}
     </span>
   )
 }

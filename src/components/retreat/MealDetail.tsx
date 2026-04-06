@@ -81,18 +81,38 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
     (i) => i.meal_id === meal.id && !i.is_prefill
   )
 
-  const handleSave = () => {
+  const saveFields = (overrides: Partial<{
+    label: string
+    time: string
+    style: MealStyle
+    recipeTitle: string
+    recipeNotes: string
+  }> = {}) => {
+    const nextStyle = overrides.style ?? style
+    const nextRecipeTitle = overrides.recipeTitle ?? recipeTitle
+    const nextRecipeNotes = overrides.recipeNotes ?? recipeNotes
     updateMeal.mutate({
       id: meal.id,
       retreatId,
       updates: {
-        label,
-        time,
-        style,
-        recipe_title: style === 'assigned_recipe' ? recipeTitle : null,
-        recipe_notes: style === 'assigned_recipe' ? recipeNotes : null,
+        label: overrides.label ?? label,
+        time: overrides.time ?? time,
+        style: nextStyle,
+        recipe_title: nextStyle === 'assigned_recipe' ? nextRecipeTitle : null,
+        recipe_notes: nextStyle === 'assigned_recipe' ? nextRecipeNotes : null,
       },
     })
+  }
+
+  const handleStyleChange = (nextStyle: MealStyle) => {
+    setStyle(nextStyle)
+    saveFields({ style: nextStyle })
+  }
+
+  const handleDone = () => {
+    // Flush any unsaved text state then close
+    saveFields()
+    onClose()
   }
 
   const handleAssignLead = (memberId: string) => {
@@ -251,8 +271,21 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
 
         <div className="space-y-4">
           {/* Label & time */}
-          <Input label="Label" value={label} onChange={(e) => setLabel(e.target.value)} />
-          <Input label="Time" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+          <Input
+            label="Label"
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            onBlur={() => saveFields({ label })}
+          />
+          <Input
+            label="Time"
+            type="time"
+            value={time}
+            onChange={(e) => {
+              setTime(e.target.value)
+              saveFields({ time: e.target.value })
+            }}
+          />
 
           {/* Style toggle */}
           <div className="flex flex-col gap-1.5">
@@ -260,7 +293,7 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setStyle('generic')}
+                onClick={() => handleStyleChange('generic')}
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                   style === 'generic'
                     ? 'bg-green-700 text-white'
@@ -271,7 +304,7 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
               </button>
               <button
                 type="button"
-                onClick={() => setStyle('assigned_recipe')}
+                onClick={() => handleStyleChange('assigned_recipe')}
                 className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                   style === 'assigned_recipe'
                     ? 'bg-amber-600 text-white'
@@ -475,6 +508,7 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
                 label="Recipe title"
                 value={recipeTitle}
                 onChange={(e) => setRecipeTitle(e.target.value)}
+                onBlur={() => saveFields({ recipeTitle })}
                 placeholder="e.g. Thai Green Curry"
               />
               <div className="flex flex-col gap-1.5">
@@ -486,6 +520,7 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
                   rows={3}
                   value={recipeNotes}
                   onChange={(e) => setRecipeNotes(e.target.value)}
+                  onBlur={() => saveFields({ recipeNotes })}
                   placeholder="Instructions, links, etc."
                 />
               </div>
@@ -577,14 +612,12 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
             </div>
           </div>
 
-          {/* Save / close */}
-          <div className="flex justify-end gap-2 pt-2">
-            <Button variant="secondary" onClick={onClose}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={updateMeal.isPending}>
-              {updateMeal.isPending ? 'Saving...' : 'Save changes'}
-            </Button>
+          {/* Footer — everything autosaves on blur, this just closes */}
+          <div className="flex items-center justify-between pt-2">
+            <span className="text-xs text-stone-400">
+              {updateMeal.isPending ? 'Saving…' : 'Changes save automatically'}
+            </span>
+            <Button onClick={handleDone}>Done</Button>
           </div>
         </div>
       </div>
