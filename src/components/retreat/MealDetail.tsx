@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   useUpdateMeal,
   useMealAssignments,
@@ -13,6 +13,8 @@ import {
 import { useAuth } from '../layout/AuthGuard'
 import { getPrefillsForMealType } from '../../lib/prefills'
 import { EXCLUDED_MARKER } from '../../lib/shopping-aggregator'
+import { hasAiKey } from '../../lib/ai-settings'
+import { generateRecipe, type GeneratedRecipe } from '../../lib/recipe-generator'
 import type { Meal, RetreatMember, MealStyle } from '../../types'
 import Button from '../ui/Button'
 import Input from '../ui/Input'
@@ -33,6 +35,19 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
   const [recipeNotes, setRecipeNotes] = useState(meal.recipe_notes || '')
   const [ingredientName, setIngredientName] = useState('')
   const [ingredientQty, setIngredientQty] = useState('')
+  const [aiKeyPresent, setAiKeyPresent] = useState(hasAiKey())
+  const [showRecipeGen, setShowRecipeGen] = useState(false)
+  const [cuisineHint, setCuisineHint] = useState('')
+  const [veganDefault, setVeganDefault] = useState(true)
+  const [generating, setGenerating] = useState(false)
+  const [generateError, setGenerateError] = useState<string | null>(null)
+  const [pendingRecipe, setPendingRecipe] = useState<GeneratedRecipe | null>(null)
+
+  useEffect(() => {
+    const onChange = () => setAiKeyPresent(hasAiKey())
+    window.addEventListener('ai-key-changed', onChange)
+    return () => window.removeEventListener('ai-key-changed', onChange)
+  }, [])
 
   const updateMeal = useUpdateMeal()
   const { data: allMembers = [] } = useRetreatMembers(retreatId)
@@ -138,6 +153,58 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
 
   const headcount = mealAttendees.length
   const prefills = getPrefillsForMealType(label)
+
+  const handleGenerateRecipe = async () => {
+    setGenerating(true)
+    setGenerateError(null)
+    setPendingRecipe(null)
+    try {
+      const numPeople = headcount > 0 ? headcount : members.length
+      const dietary = veganDefault ? ['vegan'] : []
+      const recipe = await generateRecipe({
+        mealLabel: label,
+        numPeople,
+        allergies,
+        dietary,
+        cuisineHint: cuisineHint.trim() || undefined,
+      })
+      setPendingRecipe(recipe)
+    } catch (err) {
+      setGenerateError(err instanceof Error ? err.message : 'Failed to generate recipe')
+    } finally {
+      setGenerating(false)
+    }
+  }
+
+  const handleAcceptRecipe = async () => {
+    if (!pendingRecipe) return
+    // Save title + notes to the meal
+    updateMeal.mutate({
+      id: meal.id,
+      retreatId,
+      updates: {
+        recipe_title: pendingRecipe.title,
+        recipe_notes: pendingRecipe.notes,
+      },
+    })
+    setRecipeTitle(pendingRecipe.title)
+    setRecipeNotes(pendingRecipe.notes)
+
+    // Add ingredients to the shopping list, attached to this meal
+    for (const ing of pendingRecipe.ingredients) {
+      addShoppingItem.mutate({
+        retreat_id: retreatId,
+        name: ing.name,
+        quantity: ing.quantity || undefined,
+        category: ing.category || 'misc',
+        meal_id: meal.id,
+        added_by_member_id: currentMember?.id || null,
+      })
+    }
+
+    setPendingRecipe(null)
+    setShowRecipeGen(false)
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -284,6 +351,103 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
           {/* Recipe fields */}
           {style === 'assigned_recipe' && (
             <>
+              {/* AI recipe generator */}
+              {aiKeyPresent ? (
+                <div className="rounded-lg border border-indigo-200 bg-indigo-50 p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-sm font-semibold text-indigo-900">Generate with AI</h3>
+                      <p className="text-xs text-indigo-600">
+                        Auto-fill recipe + ingredients based on attendees and allergies
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowRecipeGen((v) => !v)}
+                      className="rounded-lg px-3 py-1.5 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
+                    >
+                      {showRecipeGen ? 'Hide' : 'Open'}
+                    </button>
+                  </div>
+
+                  {showRecipeGen && (
+                    <div className="mt-3 space-y-3">
+                      <div className="grid grid-cols-2 gap-2 text-xs text-indigo-900">
+                        <div className="rounded bg-white px-2 py-1.5 border border-indigo-100">
+                          <span className="text-indigo-500">People:</span>{' '}
+                          <strong>{headcount > 0 ? headcount : members.length}</strong>
+                          {headcount === 0 && <span className="text-indigo-400"> (all members)</span>}
+                        </div>
+                        <div className="rounded bg-white px-2 py-1.5 border border-indigo-100">
+                          <span className="text-indigo-500">Meal:</span> <strong>{label}</strong>
+                        </div>
+                        <div className="col-span-2 rounded bg-white px-2 py-1.5 border border-indigo-100">
+                          <span className="text-indigo-500">Allergies:</span>{' '}
+                          {allergies.length > 0 ? <strong>{allergies.join(', ')}</strong> : <span className="text-indigo-400">none</span>}
+                        </div>
+                      </div>
+
+                      <label className="flex items-center gap-2 text-sm text-indigo-900">
+                        <input
+                          type="checkbox"
+                          checked={veganDefault}
+                          onChange={(e) => setVeganDefault(e.target.checked)}
+                          className="rounded border-indigo-300 text-indigo-700 focus:ring-indigo-500"
+                        />
+                        Vegan
+                      </label>
+
+                      <Input
+                        placeholder="Cuisine hint (optional, e.g. Thai, Italian, comfort food)"
+                        value={cuisineHint}
+                        onChange={(e) => setCuisineHint(e.target.value)}
+                      />
+
+                      <Button onClick={handleGenerateRecipe} disabled={generating} size="sm">
+                        {generating ? 'Generating…' : pendingRecipe ? 'Regenerate' : 'Generate recipe'}
+                      </Button>
+
+                      {generateError && (
+                        <p className="text-xs text-red-600">{generateError}</p>
+                      )}
+
+                      {pendingRecipe && (
+                        <div className="rounded-lg border border-indigo-200 bg-white p-3 space-y-2">
+                          <h4 className="text-sm font-semibold text-stone-800">{pendingRecipe.title}</h4>
+                          <p className="whitespace-pre-wrap text-xs text-stone-600">{pendingRecipe.notes}</p>
+                          <div>
+                            <p className="text-xs font-medium text-stone-700">Ingredients ({pendingRecipe.ingredients.length})</p>
+                            <ul className="mt-1 space-y-0.5 text-xs text-stone-600">
+                              {pendingRecipe.ingredients.map((ing, i) => (
+                                <li key={i} className="flex justify-between">
+                                  <span>{ing.name}</span>
+                                  <span className="text-stone-400">{ing.quantity}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div className="flex gap-2 pt-1">
+                            <Button size="sm" onClick={handleAcceptRecipe}>
+                              Use this recipe
+                            </Button>
+                            <Button size="sm" variant="secondary" onClick={() => setPendingRecipe(null)}>
+                              Discard
+                            </Button>
+                          </div>
+                          <p className="text-xs text-stone-400">
+                            Accepting will overwrite the current recipe and add all ingredients to the shopping list.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-stone-400">
+                  Tip: add an AI API key in Settings to enable recipe generation.
+                </p>
+              )}
+
               <Input
                 label="Recipe title"
                 value={recipeTitle}
