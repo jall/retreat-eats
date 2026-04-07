@@ -64,7 +64,7 @@ export default function ParticipantList({ retreatId }: ParticipantListProps) {
               className="flex items-start justify-between rounded-lg border border-stone-200 bg-white p-4"
             >
               <div className="flex flex-1 items-start gap-3">
-                <Avatar name={member.display_name} size="md" />
+                <Avatar name={member.display_name} src={member.avatar_url} size="md" />
                 <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <span className="font-medium text-stone-800">{member.display_name}</span>

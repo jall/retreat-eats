@@ -9,6 +9,7 @@ import {
   useShoppingItems,
   useAddShoppingItem,
   useRemoveShoppingItem,
+  useMeals,
 } from '../../lib/queries'
 import { useAuth } from '../layout/AuthGuard'
 import { getPrefillsForMealType } from '../../lib/prefills'
@@ -58,6 +59,7 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
   const removeAssignment = useRemoveMealAssignment()
   const { data: attendance = [] } = useAttendance(retreatId)
   const { data: allShoppingItems = [] } = useShoppingItems(retreatId)
+  const { data: allMeals = [] } = useMeals(retreatId)
   const addShoppingItem = useAddShoppingItem()
   const removeShoppingItem = useRemoveShoppingItem()
 
@@ -192,12 +194,29 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
     try {
       const numPeople = headcount > 0 ? headcount : members.length
       const dietary = veganDefault ? ['vegan'] : []
+
+      // Build context from sibling meals so the AI doesn't repeat itself.
+      // Skip the current meal, and skip any meal with no useful signal
+      // (generic meal types like "Breakfast" with no recipe still help
+      // — they tell the model "this slot is already a generic breakfast").
+      const otherMeals = allMeals
+        .filter((m) => m.id !== meal.id)
+        .map((m) => {
+          const mWithDay = m as Meal & { retreat_day?: { date?: string } }
+          return {
+            label: m.label,
+            recipeTitle: m.recipe_title,
+            dayDate: mWithDay.retreat_day?.date,
+          }
+        })
+
       const recipe = await generateRecipe({
         mealLabel: label,
         numPeople,
         allergies,
         dietary,
         cuisineHint: cuisineHint.trim() || undefined,
+        otherMeals,
       })
       setPendingRecipe(recipe)
     } catch (err) {
@@ -571,12 +590,16 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
           <div className="flex flex-col gap-1.5">
             <label className="text-sm font-medium text-stone-700">Lead cook</label>
             <div className="flex items-center gap-2">
-              {lead && (
-                <Avatar
-                  name={members.find((m) => m.id === lead.member_id)?.display_name || '?'}
-                  size="md"
-                />
-              )}
+              {lead && (() => {
+                const leadMember = members.find((m) => m.id === lead.member_id)
+                return (
+                  <Avatar
+                    name={leadMember?.display_name || '?'}
+                    src={leadMember?.avatar_url}
+                    size="md"
+                  />
+                )
+              })()}
               <select
                 value={lead?.member_id || ''}
                 onChange={(e) => handleAssignLead(e.target.value)}
@@ -605,7 +628,7 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
                     onChange={() => handleToggleHelper(m.id)}
                     className="rounded border-stone-300 text-green-700 focus:ring-green-500"
                   />
-                  <Avatar name={m.display_name} size="sm" />
+                  <Avatar name={m.display_name} src={m.avatar_url} size="sm" />
                   {m.display_name}
                 </label>
               ))}

@@ -12,12 +12,19 @@ export type GeneratedRecipe = {
   ingredients: GeneratedIngredient[]
 }
 
+export type OtherMealContext = {
+  label: string // e.g. "Dinner"
+  recipeTitle?: string | null // if an assigned_recipe meal has a title
+  dayDate?: string // ISO, for ordering context ("day before" / "same day")
+}
+
 export type RecipeRequest = {
   mealLabel: string // e.g. "Dinner"
   numPeople: number
   allergies: string[] // pooled across attendees
   dietary: string[] // e.g. ["vegan"]
   cuisineHint?: string
+  otherMeals?: OtherMealContext[] // other meals already planned in the retreat
 }
 
 const SYSTEM_PROMPT = `You are a helpful chef assistant for a group retreat meal planner. \
@@ -37,6 +44,17 @@ function buildUserPrompt(req: RecipeRequest): string {
     parts.push(`STRICT ALLERGIES — must not contain: ${req.allergies.join(', ')}`)
   }
   if (req.cuisineHint?.trim()) parts.push(`Cuisine hint: ${req.cuisineHint.trim()}`)
+
+  if (req.otherMeals && req.otherMeals.length > 0) {
+    parts.push('')
+    parts.push('Other meals already planned in this retreat (DO NOT repeat or closely mirror these — pick a meaningfully different cuisine, cooking technique, and main protein/carb):')
+    for (const m of req.otherMeals) {
+      const name = m.recipeTitle ? `${m.label} — ${m.recipeTitle}` : `${m.label} (generic, no specific recipe)`
+      parts.push(`- ${name}`)
+    }
+    parts.push('')
+    parts.push('It IS fine (even encouraged) to share common pantry staples across meals — rice, onions, garlic, olive oil, lemons, herbs, beans, etc. — since that reduces shopping waste. Avoid repeating the signature/hero ingredients or the same overall dish archetype.')
+  }
 
   parts.push('')
   parts.push('Return JSON with this exact shape:')
