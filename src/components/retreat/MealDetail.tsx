@@ -620,18 +620,21 @@ export default function MealDetail({ meal, retreatId, members, onClose }: MealDe
           <div className="flex flex-col gap-1.5">
             <span className="text-sm font-medium text-stone-700">Helpers</span>
             <div className="space-y-1">
-              {[...members].sort((a, b) => a.display_name.localeCompare(b.display_name)).map((m) => (
-                <label key={m.id} className="flex items-center gap-2 text-sm text-stone-700">
-                  <input
-                    type="checkbox"
-                    checked={helpers.some((h) => h.member_id === m.id)}
-                    onChange={() => handleToggleHelper(m.id)}
-                    className="rounded border-stone-300 text-green-700 focus:ring-green-500"
-                  />
-                  <Avatar name={m.display_name} src={m.avatar_url} size="sm" />
-                  {m.display_name}
-                </label>
-              ))}
+              {[...members]
+                .filter((m) => m.id !== lead?.member_id)
+                .sort((a, b) => a.display_name.localeCompare(b.display_name))
+                .map((m) => (
+                  <label key={m.id} className="flex items-center gap-2 text-sm text-stone-700">
+                    <input
+                      type="checkbox"
+                      checked={helpers.some((h) => h.member_id === m.id)}
+                      onChange={() => handleToggleHelper(m.id)}
+                      className="rounded border-stone-300 text-green-700 focus:ring-green-500"
+                    />
+                    <Avatar name={m.display_name} src={m.avatar_url} size="sm" />
+                    {m.display_name}
+                  </label>
+                ))}
             </div>
           </div>
 
